@@ -6,10 +6,15 @@ import sqlite3
 from .db import DB
 from contrib.p4thpy.tools import Tools
 
+class QueryFactoryError(Exception):
+    pass
+
 class QueryFactory:
 
-    def __init__(self, db=None):
-        self.db = DB() if db is None else DB()
+    uid = str(uuid4())
+    
+    def __init__(self, util):
+        self.util = util
         
     def _joinCondition(self, leftAlias, rightAlias, columns=None):
         _columns = columns \
@@ -17,10 +22,10 @@ class QueryFactory:
 
         cs = Tools.mapKeyVal(_columns,
                            lambda rc, lc: '{}.{} = {}.{}'
-                           .format(self.db.quote(leftAlias),
-                                   self.db.quote(lc),
-                                   self.db.quote(rightAlias),
-                                   self.db.quote(rc)))
+                           .format(self.util.quote(leftAlias),
+                                   self.util.quote(lc),
+                                   self.util.quote(rightAlias),
+                                   self.util.quote(rc)))
         return ' AND '.join(cs.values())
         
     def _anyDiffCondition(self, leftAlias, rightAlias, columnNames):
@@ -33,60 +38,54 @@ class QueryFactory:
              END = 1
             )'''.format(qL=qL, qR=qR)
 
-        #print(columnNames)
         cs = Tools.map(columnNames,
-                           lambda columnName: isDistcintFrom(self.db.quote(columnName, table=leftAlias),
-                                                         self.db.quote(columnName, table=rightAlias))
+                           lambda columnName: isDistcintFrom(self.util.quote(columnName, table=leftAlias),
+                                                         self.util.quote(columnName, table=rightAlias))
                              )
         return ' OR '.join(cs)
 
     def deletedRowsQuery(self, primaryKeyNames, preTable, postTable, columnNames, p={}):
-        joinClause = self._joinCondition('_pre', '_post', primaryKeyNames)
-        selectClause = ','.join(self.db.quote(columnNames, table='_pre'))
-        orderClause = ','.join(self.db.quote(primaryKeyNames, table='_pre'))
-        pkNotNullClause = '_post.{} IS NULL'.format(self.db.quote(primaryKeyNames[0]))
+        selectClause = ','.join(self.util.quote(columnNames, table='_pre'))
+        orderClause = ','.join(self.util.quote(primaryKeyNames, table='_pre'))
 
         q = '''
         SELECT {selectClause}
         FROM {preTable} as _pre
-        LEFT JOIN {postTable} as _post ON {joinClause}
-        WHERE {pkNotNullClause}
+        WHERE _pre._op_ = 'D'
         ORDER BY {orderClause}
         '''.format(selectClause=selectClause,
-                   preTable=self.db.quote(preTable),
-                   postTable=self.db.quote(postTable),
-                   joinClause=joinClause,
-                   pkNotNullClause=pkNotNullClause,
+                   preTable=self.util.quote(preTable),
                    orderClause=orderClause)
         return (q,p)
 
     def changedRowsQuery(self, primaryKeyNames, preTable, postTable, columnNames, p={}):
         valueColumns = list(set(columnNames) - set(primaryKeyNames))
-        joinClause = self._joinCondition('_pre', '_post', primaryKeyNames)
-        selectClause = ','.join(self.db.quote(columnNames, table='_post'))
-        orderClause = ','.join(self.db.quote(primaryKeyNames, table='_pre'))
-        anyDiffClause = self._anyDiffCondition('_pre', '_post', valueColumns)
+        selectClause = ','.join(self.util.quote(columnNames, table='_pre'))
+        orderClause = ','.join(self.util.quote(primaryKeyNames, table='_pre'))
 
         q = '''
         SELECT {selectClause}
         FROM {preTable} as _pre
-        INNER JOIN {postTable} as _post ON {joinClause}
-        WHERE {anyDiffClause}
+        WHERE _pre._op_ = 'U'
         ORDER BY {orderClause}
         '''.format(selectClause=selectClause,
-                   preTable=self.db.quote(preTable),
-                   postTable=self.db.quote(postTable),
-                   joinClause=joinClause,
-                   anyDiffClause=anyDiffClause,
+                   preTable=self.util.quote(preTable),
                    orderClause=orderClause)
         return (q,p)
 
     def createdRowsQuery(self, primaryKeyNames, preTable, postTable, columnNames, p={}):
-        joinClause = self._joinCondition('_post', '_pre', primaryKeyNames)
-        selectClause = ','.join(self.db.quote(columnNames, table='_post'))
-        orderClause = ','.join(self.db.quote(primaryKeyNames, table='_post'))
-        pkNotNullClause = '_pre.{} IS NULL'.format(self.db.quote(primaryKeyNames[0]))
+        selectClause = ','.join(self.util.quote(columnNames, table='_post'))
+        orderClause = ','.join(self.util.quote(primaryKeyNames, table='_post'))
 
+        q = '''
+        SELECT {selectClause}
+        FROM {preTable} as _post
+        WHERE _post._op_ = 'I'
+        ORDER BY {orderClause}
+        '''.format(selectClause=selectClause,
+                   preTable=self.util.quote(preTable),
+                   orderClause=orderClause)
+        return (q,p)
         q = '''
         SELECT {selectClause}
         FROM {postTable} as _post
@@ -94,34 +93,26 @@ class QueryFactory:
         WHERE {pkNotNullClause}
         ORDER BY {orderClause}
         '''.format(selectClause=selectClause,
-                   preTable=self.db.quote(preTable),
-                   postTable=self.db.quote(postTable),
+                   preTable=self.util.quote(preTable),
+                   postTable=self.util.quote(postTable),
                    joinClause=joinClause,
                    pkNotNullClause=pkNotNullClause,
                    orderClause=orderClause)
         return (q,p)
 
-        
-    def cloneTables(self, tables=[]):
-        qps = {}
-        for table in tables:
-            name = '''{}_{}'''.format(str(uuid4()), table)
-            q = '''
-            CREATE TEMP TABLE "{}" AS SELECT * FROM "{}";
-            '''.format(name, table)
-            qps[name] = (q,{})
-        return qps
-
+    def logQueries(self, table):
+        raise QueryFactoryError('Not implemented')
     
-#import apsw
-
-
 class QueryRunner:
 
+    uid = str(uuid4())
+    
     def __init__(self, db):
         self.db = db
-        
-    def run(self, qps):
+
+
+
+    def run(self, qps, *args, **kwargs):
         #print(qps)
         _qps = (qps, {}) if Tools.isString(qps) else qps
         _qps = [_qps] if Tools.isTuple(_qps) else _qps
@@ -129,29 +120,38 @@ class QueryRunner:
         for _,qp in Tools.keyValIter(_qps, stringAsSingular=True):
             _qp = (qp,) if Tools.isString(qp) else qp
             #print(_qp)
-            res.append(self.db.query(_qp))
+            res.append(self.db.query(_qp, *args, **kwargs))
         return res[0] if Tools.isTuple(qps) or Tools.isString(qps) else res
     
 class DBCompare:
 
-    def __init__(self, queryFactory, queryRunner):
-        self.queryFactory = queryFactory
-        self.queryRunner = queryRunner
+    def __init__(self, util, queryFactory, queryRunner):
+        self.util = util
+        self._queryFactory = queryFactory
+        self._queryRunner = queryRunner
 
-    def queryColumns(self, tables=None):
-        columnsQuery = self.queryFactory.columnsQuery(tables=tables)
+    @property
+    def queryFactory(self):
+        return self._queryFactory
+    
+    @property
+    def queryRunner(self):
+        return self._queryRunner
+    
+    def queryColumns(self, tableRE=None):
+        columnsQuery = self.queryFactory.columnsQuery(tableRE=tableRE)
         return self.queryRunner.run(columnsQuery)
  
-    def queryTables(self):
-        columns = self.queryColumns()
+    def queryTables(self, tableRE=None):
+        columns = self.queryColumns(tableRE=tableRE)
         tables = Tools.pipe(columns, [
             [Tools.pluck, [lambda r, i: r['table']], {}],
             [Tools.unique, [], {}]
         ])
         return tables
 
-    def queryPrimaryKeys(self, tables):
-        columnsQuery = self.queryFactory.columnsQuery(tables)
+    def queryPrimaryKeys(self, tableRE=None):
+        columnsQuery = self.queryFactory.columnsQuery(tableRE=tableRE)
         r = self.queryRunner.run(columnsQuery)
         tables = Tools.pipe(flatTableColumnRows, [
             [Tools.pluck, [lambda r, i: r['table']], {}],
@@ -159,21 +159,41 @@ class DBCompare:
         ])
         return tables
 
-    def cloneTables(self, tables):
-        qps = self.queryFactory.cloneTables(tables)
-        nameMap = dict(zip(tables, qps.keys()))
-        self.queryRunner.run(qps)
-        return nameMap
+    def setUpLogging(self, tables):
+
+        nameMap = {}
+        restorQueries = []
+        for table in tables:
+            changeTableName, qsOpen, qsClose \
+                = self.queryFactory.logQueries(table)
+            self.queryRunner.run(qsOpen, debug=None)
+            nameMap[table] = changeTableName
+            restorQueries = restorQueries + qsClose
+        return nameMap, restorQueries
+        
+    def tearDownLogging(self, removeQueries):
+
+        nameMap = {}
+        restorQueries = []
+        for table in tables:
+            changeTableName, qsOpen, qsClose \
+                = self.queryFactory.logQueries(table)
+            self.queryRunner.run(qsOpen)
+            nameMap[table] = changeTableName
+            restorQueries = restorQueries + qsClose
+        return nameMap, restorQueries
         
     
     def prepare(self, spec={}):
-        spec['tables'] = self.queryTables() \
-            if not 'tables' in spec else spec['tables']
+        spec['tableRE'] = spec['tableRE'] if 'tableRE' in spec else None 
+        spec['tables'] = spec['tables'] if 'tables' in spec else self.queryTables(tableRE=spec['tableRE'])
 
-        spec['columns'] = self.queryColumns(spec['tables']) \
+        spec['columns'] = self.queryColumns(tableRE=spec['tableRE']) \
             if not 'columns' in spec else spec['columns']
 
-        spec['tableCloneMap'] = self.cloneTables(spec['tables'])
+        nameMap, restorQueries = self.setUpLogging(spec['tables'])
+        spec['tableCloneMap'] = nameMap
+        spec['restoreQueries'] = restorQueries
 
         return spec
 
@@ -188,7 +208,6 @@ class DBCompare:
             assert table in spec['tableCloneMap']
 
             diff = tableDiffMap[table] if table in tableDiffMap else {}
-
             #primaryKeys = Tools.filter(columns, lambda column: column['isPrimaryKey'])
             primaryKeyNames = Tools.pipe(columns, [
                 [Tools.filter, [lambda column: column['isPrimaryKey']]],
@@ -221,9 +240,10 @@ class DBCompare:
             
         spec['tableDiffMap'] = tableDiffMap 
 
+    def finalize(self, spec):
+        if 'restoreQueries' in spec:
+            self.queryRunner.run(spec['restoreQueries'], debug=None)
+            del spec['restoreQueries']
         
 
         
-if __name__ == '__main__':
-
-    print('\n', 'No tests to run.')

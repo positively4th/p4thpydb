@@ -1,3 +1,5 @@
+import jsonpickle
+
 class Ts:
 
     def transformerFactory(transformMap, inverse=False):

@@ -1,25 +1,26 @@
 import unittest
 
-class TestDBCompare(unittest.TestCase):
+class TestDBSQLite(unittest.TestCase):
 
     def test_legacy(self):
 
         import tempfile
-        import pytest
         from collections import OrderedDict
 
         from db.sqlite.db import DB
-        from db.p import P
+        from db.sqlite.util import Util
         from db.ts import Ts
-        from db.orm import ORM
-        from db.pipe import Pipe
+        from db.sqlite.orm import ORM
+        from db.sqlite.pipes import Pipes
 
-        #P
+        #Util
+
+        util = Util()
         q = '''
-    SELECT :p1, p2
-    FROM a as _t
-    WHRER :_p3 > :5p
-    '''
+        SELECT :p1, p2
+        FROM a as _t
+        WHRER :_p3 > :5p
+        '''
         p = {
             'p1': 1,
             'p2': 2,
@@ -27,7 +28,7 @@ class TestDBCompare(unittest.TestCase):
             'p4': 4,
             '5p': 5,
         }
-        pStripped = P.pStrip(q, p)
+        pStripped = util.pStrip(q, p)
         #print(pStripped)
         assert {
             'p1': 1,
@@ -43,8 +44,9 @@ class TestDBCompare(unittest.TestCase):
         db = DB(dbFile, attaches={
             't mp': tmpSchemaFile,
         })
-        pipe = Pipe();
-        orm = ORM(db, pipe);
+        util = Util()
+        pipes = Pipes();
+        orm = ORM(db);
         db.query('CREATE TABLE strvec3 (id TEXT, a REAL, b REAL, c REAL, PRIMARY KEY (id))')
         db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('111', 1, 1, 1)");
         db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('123', 1, 2, 3)");
@@ -52,15 +54,15 @@ class TestDBCompare(unittest.TestCase):
         db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('321', 3, 2, 1)");
         db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('333', 3, 3, 3)");
 
-        db.query('CREATE TABLE {} (id TEXT, a REAL, b REAL, c REAL, PRIMARY KEY (id))'.format(db.quote('t mp._tstrvec3')), debug=False)
-        db.query("INSERT INTO {} (id, a, b, c) VALUES ('111', 10, 10, 10)".format(db.quote('t mp._tstrvec3')));
-        db.query("INSERT INTO {} (id, a, b, c) VALUES ('123', 10, 20, 30)".format(db.quote('t mp._tstrvec3')));
-        db.query("INSERT INTO {} (id, a, b, c) VALUES ('222', 20, 20, 20)".format(db.quote('t mp._tstrvec3')));
-        db.query("INSERT INTO {} (id, a, b, c) VALUES ('321', 30, 20, 10)".format(db.quote('t mp._tstrvec3')));
-        db.query("INSERT INTO {} (id, a, b, c) VALUES ('333', 30, 30, 30)".format(db.quote('t mp._tstrvec3')));
+        db.query('CREATE TABLE {} (id TEXT, a REAL, b REAL, c REAL, PRIMARY KEY (id))'.format(util.quote('t mp._tstrvec3')), debug=False)
+        db.query("INSERT INTO {} (id, a, b, c) VALUES ('111', 10, 10, 10)".format(util.quote('t mp._tstrvec3')));
+        db.query("INSERT INTO {} (id, a, b, c) VALUES ('123', 10, 20, 30)".format(util.quote('t mp._tstrvec3')));
+        db.query("INSERT INTO {} (id, a, b, c) VALUES ('222', 20, 20, 20)".format(util.quote('t mp._tstrvec3')));
+        db.query("INSERT INTO {} (id, a, b, c) VALUES ('321', 30, 20, 10)".format(util.quote('t mp._tstrvec3')));
+        db.query("INSERT INTO {} (id, a, b, c) VALUES ('333', 30, 30, 30)".format(util.quote('t mp._tstrvec3')));
 
         #attached
-        row = db.query("SELECT * FROM {} WHERE id = '321'".format(db.quote('t mp._tstrvec3')));
+        row = db.query("SELECT * FROM {} WHERE id = '321'".format(util.quote('t mp._tstrvec3')));
         assert len(row) == 1
         row = row[0]
         assert {
@@ -73,13 +75,13 @@ class TestDBCompare(unittest.TestCase):
 
         #quote
         col = 'alfa'
-        assert db.quote(col) == '`alfa`'
-        assert db.quote(col, False) == 'alfa'
+        assert util.quote(col) == '`alfa`'
+        assert util.quote(col, False) == 'alfa'
 
         cols = ['alfa', 'beta']
-        #print('cols', db.quote(cols))
-        assert db.quote(cols) == ['`alfa`', '`beta`']
-        assert db.quote(cols, False) == ['alfa', 'beta']
+        #print('cols', util.quote(cols))
+        assert util.quote(cols) == ['`alfa`', '`beta`']
+        assert util.quote(cols, False) == ['alfa', 'beta']
 
 
         ##ORM
@@ -110,11 +112,11 @@ class TestDBCompare(unittest.TestCase):
         }
         tableSpec['views']['prefixed'] = {
             'query': "SELECT {team_id}, '_' || {name} {name}, {country}, {verified} FROM {table}".format(
-                team_id=db.quote('team_id'),
-                name=db.quote('name'),
-                country=db.quote('country'),
-                verified=db.quote('verified'),
-                table=db.quote(tableSpec['name']),
+                team_id=util.quote('team_id'),
+                name=util.quote('name'),
+                country=util.quote('country'),
+                verified=util.quote('verified'),
+                table=util.quote(tableSpec['name']),
             ),
             'columnSpecs': {
                 'team_id': {
@@ -150,7 +152,7 @@ class TestDBCompare(unittest.TestCase):
         orm.insert(tableSpec, [
             { 'team_id': 't1', 'name': 'n1', 'country': '1', 'verified': True, },
             { 'team_id': 't2', 'name': 'n2', 'country': '2', 'verified': 0, }
-        ], debug=True)
+        ], debug=False)
         #assert 1 == 0
         rows = db.query(orm.select(tableSpec))
         rows.sort(key=lambda row: row['team_id'])
@@ -228,60 +230,49 @@ class TestDBCompare(unittest.TestCase):
             },
             'primaryKeys': ["id"]
         }
-        tableSpec['related'] = [{
-            'select': 'SELECT "a", Count(*) "aCount" FROM "strvec3" GROUP BY "a"',
-            'foreignKeyMap': {
-                'a': 'a'
-            },
-            'columns': {
-                'aCount': 'aCount + 1000',
-            }
-        }]
 
         assert True == orm.tableExists(tableSpec)
         assert False == orm.ensureTable(tableSpec)
 
         qpT = orm.select(tableSpec)
-        qpT = pipe.order(qpT, ['id'])
-        rows = db.query(qpT, debug=1)
+        qpT = pipes.order(qpT, ['id'])
+        rows = db.query(qpT, debug=False)
         #for row in rows:
         #    print(row)
         assert rows[0]['id'] == '111'
         assert rows[0]['a'] == 1
-        assert rows[0]['aCount'] == 1002
         assert rows[2]['id'] == '222'
         assert rows[2]['a'] == 2
-        assert rows[2]['aCount'] == 1001
         assert rows[3]['id'] == '321'
         assert rows[3]['a'] == 3
-        assert rows[3]['aCount'] == 1002
-        ##Pipe
+
+        ##Pipes
         # equals
         q = 'SELECT * FROM strvec3'
         p = []
-        q,p, T = pipe.equals((q, p), map=[
+        q,p, T = pipes.equals((q, p), map=[
             {'a': 1, 'b': 1, 'c': 1},
             {'a': 3, 'b': 2, 'c': 1},
         ])
         rows = db.query((q,p, T))
         assert len(rows) == 2
 
-        # map, pipe
+        # map, pipes
         q = 'SELECT * FROM strvec3'
         p = []
-        qpT = pipe.concat((q, p), pipes=[ 
-            [pipe.equals, {'map': {'a': 1, 'b': 1, 'c': 1}}]
+        qpT = pipes.concat((q, p), pipes=[ 
+            [pipes.equals, {'map': {'a': 1, 'b': 1, 'c': 1}}]
         ])
         rows = db.query((qpT))
         assert len(rows) == 1
         assert rows[0]['id'] == '111'
 
-        # pipeLike, pipePipe
+        # pipesLike, pipesPipes
         q = 'SELECT * FROM strvec3'
         p = []
-        q,p, T = pipe.concat((q, p), pipes=[ 
-            [pipe.like, {'expr': 'id', 'pattern': '%2%'}],
-            [pipe.order, {'exprs': ['id'], 'orders':['DESC']}],
+        q,p, T = pipes.concat((q, p), pipes=[ 
+            [pipes.like, {'expr': 'id', 'pattern': '%2%'}],
+            [pipes.order, {'exprs': ['id'], 'orders':['DESC']}],
         ])
         rows = db.query((q,p, T))
         assert len(rows) == 3
@@ -289,13 +280,13 @@ class TestDBCompare(unittest.TestCase):
         assert rows[1]['id'] == '222'
         assert rows[0]['id'] == '321'
 
-        # pipeValues, order, limit
+        # pipesValues, order, limit
         q = 'SELECT * FROM strvec3'
         p = []
-        q,p, T = pipe.concat((q, p), pipes=[ 
-            [pipe.member, {'expr': 'a', 'values':['2', '3']}],
-            [pipe.order, {'exprs': ['a', 'b', 'c'], 'orders':['DESC', 'DESC', 'DESC']}],
-            [pipe.limit, {'limit': 10}],
+        q,p, T = pipes.concat((q, p), pipes=[ 
+            [pipes.member, {'expr': 'a', 'values':['2', '3']}],
+            [pipes.order, {'exprs': ['a', 'b', 'c'], 'orders':['DESC', 'DESC', 'DESC']}],
+            [pipes.limit, {'limit': 10}],
         ])
         rows = db.query((q,p, T))
         assert len(rows) == 3
@@ -305,69 +296,69 @@ class TestDBCompare(unittest.TestCase):
 
         q = 'SELECT * FROM strvec3'
         p = []
-        q,p, T = pipe.concat((q, p), [
-            [pipe.member, {'expr': 'a', 'values':['2', '3']}],
-            [pipe.order, {'exprs': ['a', 'b', 'c'], 'orders':['DESC', 'DESC', 'DESC']}],
-            [pipe.limit, {'limit': 2, 'offset': 1}]
+        q,p, T = pipes.concat((q, p), [
+            [pipes.member, {'expr': 'a', 'values':['2', '3']}],
+            [pipes.order, {'exprs': ['a', 'b', 'c'], 'orders':['DESC', 'DESC', 'DESC']}],
+            [pipes.limit, {'limit': 2, 'offset': 1}]
         ])
+        #[id, a, b, c] VALUES ('222', 2, 2, 2), ('321', 3, 2, 1), ('333', 3, 3, 3)
+
         #print(rows)
         rows = db.query((q,p, T))
-        assert len(rows) == 1
-        assert rows[0]['id'] == '222'
+        assert len(rows) == 2
+        assert rows[0]['id'] == '321'
+        assert rows[1]['id'] == '222'
 
-        # pipeOr
+        # pipesOr
         q = 'SELECT * FROM strvec3'
         p = []
-        q,p, T = pipe.concat((q, p, T), pipes=[
+        q,p, T = pipes.concat((q, p, T), pipes=[
             [
-                pipe.any, {
+                pipes.any, {
                     'pipes': [
-                        [pipe.equals, {'map': {'id': '222'}}],
-                        [pipe.equals, {'map': {'id': '333'}}],
+                        [pipes.equals, {'map': {'id': '222'}}],
+                        [pipes.equals, {'map': {'id': '333'}}],
                     ]
                 }
             ],
-            [pipe.order, {'exprs': ['id'], 'orders':['DESC']}],
+            [pipes.order, {'exprs': ['id'], 'orders':['DESC']}],
         ])
         rows = db.query((q,p, T))
         assert len(rows) == 2
         assert rows[0]['id'] == '333'
         assert rows[1]['id'] == '222'
 
-        # pipeAnd
+        # pipesAnd
         q = 'SELECT * FROM strvec3'
         p = []
-        q,p, T = pipe.concat((q, p), pipes=[
+        q,p, T = pipes.concat((q, p), pipes=[
             [
-                pipe.all, {
+                pipes.all, {
                     'pipes': [
-                        [pipe.equals, {'map': {'a': '1'}}],
-                        [pipe.equals, {'map': {'c': '1'}}],
+                        [pipes.equals, {'map': {'a': '1'}}],
+                        [pipes.equals, {'map': {'c': '1'}}],
                     ]
                 }
             ],
-            [pipe.order, {'exprs': ['id'], 'orders':['DESC']}],
+            [pipes.order, {'exprs': ['id'], 'orders':['DESC']}],
         ])
         rows = db.query((q,p, T))
         assert len(rows) == 1
         assert rows[0]['id'] == '111'
 
 
-        #pipe as list, string and callable
+        #pipes as list, string and callable
         q = 'SELECT * FROM strvec3'
         p = []
-        q,p,T = pipe.concat((q, p, None), [
-            [pipe.member((q, p, T), expr= 'b', values=['2'])],
-            #[pipe.member, {'expr': 'b', 'values':['2']}],
+        q,p,T = pipes.concat((q, p, None), [
+            [pipes.member((q, p, T), expr= 'b', values=['2'])],
+            #[pipes.member, {'expr': 'b', 'values':['2']}],
             ['order', {'exprs': ['a', 'b', 'c'], 'orders':['DESC', 'DESC', 'DESC']}],
-            [pipe.limit, {'limit': 2, 'offset': 2}]
+            [pipes.limit, {'limit': 2, 'offset': 2}]
         ])
         rows = db.query((q,p,T))
         assert len(rows) == 1
         assert rows[0]['id'] == '123'
-
-        print('dbFile={}'.format(dbFile))
-
 
         #aggregate
         db = DB(dbFile)
@@ -380,8 +371,8 @@ class TestDBCompare(unittest.TestCase):
         db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('333', 3, 3, 3)");
         q = 'SELECT * FROM strvec3'
         p = []
-        q,p,T = pipe.order(
-            pipe.aggregate((q, p,T), {
+        q,p,T = pipes.order(
+            pipes.aggregate((q, p,T), {
                 'sum_a': 'sum(a)',
             }, ['id'], quote=True
             ), ['id']
@@ -397,8 +388,8 @@ class TestDBCompare(unittest.TestCase):
         #DB.__DEBUG__ = True
         q = 'SELECT * FROM strvec3'
         p = []
-        q,p,T = pipe.order(
-            pipe.aggregate((q, p,T), {
+        q,p,T = pipes.order(
+            pipes.aggregate((q, p,T), {
                 'sum_a': 'sum(a)',
                 'sum_c': 'sum(c)',
             }, {
@@ -419,7 +410,7 @@ class TestDBCompare(unittest.TestCase):
         assert rows[4]['sum_a'] == 3
         assert rows[4]['sum_c'] == 3
 
-        print('dbFile={}'.format(dbFile))
+        #print('dbFile={}'.format(dbFile))
         
 
 if __name__ == '__main__':
