@@ -109,33 +109,22 @@ class DB(DB0):
     
     def exportToFile(self, path, invert=False):
 
-        if (invert):
-            shell = apsw.Shell(db=self.db.connection);
-            #print(shell.process_command, path)
-            shell.command_restore([path])
-            #assert 1 == 0
-
-
-        newCon = apsw.Connection(path, statementcachesize=20)
-        with newCon.backup("main", self.db.connection, "main") as b:
-            while not b.done:
-                b.step(100)
-                #print(b.remaining, b.pagecount, "\r")
-
-    def exportToFile(self, path, invert=False):
-
         format = 't'
 
         if (invert):
             args = [
                 'pg_restore',
                 '-d', self.url,
+                '--clean',
                 #'--format=' + format,
-                #'--verbose',
+                '--single-transaction',
+                '--if-exists',
+                '--verbose',
                 path,
             ]
             #print(args)
-            subprocess.run(args)
+            cp = subprocess.run(args)
+            cp.check_returncode()
             return
 
 
@@ -150,6 +139,24 @@ class DB(DB0):
         #print(args)
         subprocess.run(args)
     
+    def startTransaction(self):
+        if len(self.savepoints) == 0:
+            self.query('BEGIN'.format(id), debug=None);
+
+        return super().startTransaction()
+        
+    def rollback(self):
+        res = super().rollback()
+        if len(self.savepoints) == 0:
+            self.query('ROLLBACK'.format(id), debug=None);
+        return res
+        
+    def commit(self):
+        res = super().commit()
+        if len(self.savepoints) == 0:
+            self.query('COMMIT'.format(id), debug=None);
+        return res
+
         
     @property
     def cursor(self):

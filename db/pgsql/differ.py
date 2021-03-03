@@ -3,9 +3,9 @@ from uuid import uuid4
 from .db import DB
 from .pipes import Pipes
 from .util import Util
-from ..dbcompare import DBCompare as DBCompare0
-from ..dbcompare import QueryFactory as QueryFactory0
-from ..dbcompare import QueryRunner as QueryRunner0
+from ..differ import Differ as Differ0
+from ..differ import QueryFactory as QueryFactory0
+from ..differ import QueryRunner as QueryRunner0
 
         
 class QueryFactory(QueryFactory0):
@@ -123,7 +123,7 @@ class QueryRunner(QueryRunner0):
     def __init__(self, db):
         super().__init__(db)
         
-class DBCompare(DBCompare0):
+class Differ(Differ0):
 
     def __init__(self, db):
         util = Util()

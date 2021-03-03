@@ -123,7 +123,7 @@ class QueryRunner:
             res.append(self.db.query(_qp, *args, **kwargs))
         return res[0] if Tools.isTuple(qps) or Tools.isString(qps) else res
     
-class DBCompare:
+class Differ:
 
     def __init__(self, util, queryFactory, queryRunner):
         self.util = util

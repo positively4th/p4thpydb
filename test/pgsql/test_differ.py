@@ -4,13 +4,13 @@ import tempfile
 from uuid import uuid4
 from os import path
 from contrib.p4thpy.tools import Tools
-from db.pgsql.dbcompare import DBCompare
-from db.pgsql.dbcompare import QueryRunner
-from db.pgsql.dbcompare import QueryFactory
+from db.pgsql.differ import Differ
+from db.pgsql.differ import QueryRunner
+from db.pgsql.differ import QueryFactory
 from db.pgsql.util import Util
 from db.pgsql.db import DB
 
-class TestDBCompare(unittest.TestCase):
+class TestDiffer(unittest.TestCase):
 
     def test_QueryFactory(self):
         with testing.postgresql.Postgresql() as testpg:        
@@ -126,14 +126,14 @@ class TestDBCompare(unittest.TestCase):
             db.query('INSERT INTO "p".player (name, position) VALUES (\'player1\', \'lw\')')
 
 
-            dbCompare = DBCompare(db)
+            differ = Differ(db)
 
 
-            #DBDiff: compare - no diff
+            #DBDiff: differ - no diff
             spec = {
                 'tableRE': '^u[.]user$|^b[.].*$',
             }
-            spec = dbCompare.prepare(spec)
+            spec = differ.prepare(spec)
             #print(spec)
 
             assert 'tables' in spec
@@ -154,7 +154,7 @@ class TestDBCompare(unittest.TestCase):
             assert 'book' in spec['tableCloneMap']['b.book']
             assert 'user' in spec['tableCloneMap']['u.user']
 
-            dbCompare.diff(spec)
+            differ.diff(spec)
             #print(spec)
             assert 'tableDiffMap' in spec
             assert 'u.user' in spec['tableDiffMap']
@@ -165,11 +165,11 @@ class TestDBCompare(unittest.TestCase):
             assert len(spec['tableDiffMap']['b.book']['deleted']) == 0
 
 
-            #DBDiff: compare - all diffs
+            #DBDiff: differ - all diffs
             spec = {
                 'tableRE': '^u[.]user$|^b[.].*$',
                 }
-            spec = dbCompare.prepare(spec=spec)
+            spec = differ.prepare(spec=spec)
             db.query('DELETE FROM u."user" WHERE id = 2')
             db.query('DELETE FROM u."user" WHERE id = 3')
             db.query("UPDATE u.\"user\" SET name = 'author1_1' WHERE id = 1")
@@ -181,7 +181,7 @@ class TestDBCompare(unittest.TestCase):
             db.query('INSERT INTO b.book (title, author) VALUES (\'book4\', \'author4\')')
             db.query('INSERT INTO b.book (title, author) VALUES (\'book5\', \'author5\')')
 
-            dbCompare.diff(spec)
+            differ.diff(spec)
             # print(spec)
             assert 'primaryKeys' in spec
             assert spec['primaryKeys'] == ['id']
@@ -218,6 +218,6 @@ class TestDBCompare(unittest.TestCase):
             assert spec['tableDiffMap']['b.book']['created'][0] == {'id': 4, 'title': 'book4', 'author': 'author4'}
             assert spec['tableDiffMap']['b.book']['created'][1] == {'id': 5, 'title': 'book5', 'author': 'author5'}
 
-            dbCompare.finalize(spec)
+            differ.finalize(spec)
 
 

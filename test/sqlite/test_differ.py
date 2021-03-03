@@ -1,15 +1,15 @@
 import unittest
 
-class TestDBCompare(unittest.TestCase):
+class TestDiffer(unittest.TestCase):
 
     def test_legacy(self):
         import tempfile
         from uuid import uuid4
         from os import path
         from contrib.p4thpy.tools import Tools
-        from db.sqlite.dbcompare import DBCompare
-        from db.sqlite.dbcompare import QueryRunner
-        from db.sqlite.dbcompare import QueryFactory
+        from db.sqlite.differ import Differ
+        from db.sqlite.differ import QueryRunner
+        from db.sqlite.differ import QueryFactory
         from db.sqlite.db import DB
 
         DB.__DEBUG__ = False
@@ -97,11 +97,11 @@ class TestDBCompare(unittest.TestCase):
 
         #queryRunner = QueryRunner(db);
         #queryFactory = QueryFactory(db);
-        dbCompare = DBCompare(db)
+        differ = Differ(db)
 
 
-        #DBDiff: compare - no diff
-        spec = dbCompare.prepare()
+        #DBDiff: differ - no diff
+        spec = differ.prepare()
         #print(spec)
 
         assert 'tables' in spec
@@ -121,7 +121,7 @@ class TestDBCompare(unittest.TestCase):
         assert 'book' in spec['tableCloneMap']['book']
         assert 'user' in spec['tableCloneMap']['user']
 
-        dbCompare.diff(spec)
+        differ.diff(spec)
         #print(spec)
         assert 'tableDiffMap' in spec
         assert 'user' in spec['tableDiffMap']
@@ -132,20 +132,20 @@ class TestDBCompare(unittest.TestCase):
         assert len(spec['tableDiffMap']['book']['deleted']) == 0
 
 
-        #DBDiff: compare - all diffs
-        spec = dbCompare.prepare(spec={})
+        #DBDiff: differ - All diffs
+        spec = differ.prepare(spec={})
         db.query('DELETE FROM user WHERE id = 2')
         db.query('DELETE FROM user WHERE id = 3')
         db.query("UPDATE user SET name = 'author1_1' WHERE id = 1")
         db.query('INSERT INTO user (name, age) VALUES ("author4", 34)')
 
-        db.query('DELETE FROM book WHERE id = 1')
+        db.query('DELETE FROM booK WHERE id = 1')
         db.query("UPDATE book SET title = 'book2_2' WHERE id = 2")
         db.query("UPDATE book SET title = 'book3_3', author = 'author3_3' WHERE id = 3")
         db.query('INSERT INTO book (title, author) VALUES ("book4", "author4")')
         db.query('INSERT INTO book (title, author) VALUES ("book5", "author5")')
 
-        dbCompare.diff(spec)
+        differ.diff(spec)
         #print(spec)
         assert 'primaryKeys' in spec
         assert spec['primaryKeys'] == ['id']
