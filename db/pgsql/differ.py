@@ -70,7 +70,11 @@ class QueryFactory(QueryFactory0):
             '''.format(_q(_changeTable))
             ,
             '''                
-            alter table {} add column "_time_" timestamp;                 
+            alter table {} add column "_time_" timestamp without time zone;                 
+            '''.format(_q(_changeTable))
+            ,
+            '''                
+            alter table {} add column "_ordinal_" serial;                 
             '''.format(_q(_changeTable))
             ,
             '''

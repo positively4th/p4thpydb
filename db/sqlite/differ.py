@@ -41,7 +41,9 @@ class QueryFactory(QueryFactory0):
             return '''
             BEGIN
             INSERT INTO {logTable} 
-             SELECT _r.*, '{op}', datetime() 
+            SELECT _r.*, '{op}', 
+              strftime('YYYY-MM-DDTHH:MM:SS.SSS', 'now'), 
+              COALESCE((SELECT MAX(_ordinal_) + 1 as _ordinal_ FROM {logTable}), 0)
              FROM {table} _r
              WHERE _r.rowid = {row}.rowid;
             END
@@ -70,7 +72,11 @@ class QueryFactory(QueryFactory0):
             '''.format(_q(_changeTable))
             ,
             '''                
-            alter table {} add column "_time_" real                
+            alter table {} add column "_time_" test                
+            '''.format(_q(_changeTable))
+            ,
+            '''                
+            alter table {} add column "_ordinal_" int;                 
             '''.format(_q(_changeTable))
             ,
             '''

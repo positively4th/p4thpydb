@@ -44,60 +44,84 @@ class QueryFactory:
                              )
         return ' OR '.join(cs)
 
-    def deletedRowsQuery(self, primaryKeyNames, preTable, postTable, columnNames, p={}):
-        selectClause = ','.join(self.util.quote(columnNames, table='_pre'))
-        orderClause = ','.join(self.util.quote(primaryKeyNames, table='_pre'))
+    def latestChangeQuery(self, primaryKeyNames, changeTable, p={}):
+        joinClause = self._joinCondition('_l', '_r', primaryKeyNames)
+        orderClause = ','.join(self.util.quote(primaryKeyNames, table='_l'))
+        pkNullClause = '_r.{} IS NULL'.format(self.util.quote(primaryKeyNames[0]))
 
         q = '''
-        SELECT {selectClause}
-        FROM {preTable} as _pre
-        WHERE _pre._op_ = 'D'
+        SELECT _l.*
+        FROM {changeTable} as _l
+        LEFT JOIN {changeTable} as _r ON (
+          {joinClause} AND _r._ordinal_ > _l._ordinal_
+        )
+        WHERE {pkNullClause}
         ORDER BY {orderClause}
-        '''.format(selectClause=selectClause,
-                   preTable=self.util.quote(preTable),
-                   orderClause=orderClause)
-        return (q,p)
-
-    def changedRowsQuery(self, primaryKeyNames, preTable, postTable, columnNames, p={}):
-        valueColumns = list(set(columnNames) - set(primaryKeyNames))
-        selectClause = ','.join(self.util.quote(columnNames, table='_pre'))
-        orderClause = ','.join(self.util.quote(primaryKeyNames, table='_pre'))
-
-        q = '''
-        SELECT {selectClause}
-        FROM {preTable} as _pre
-        WHERE _pre._op_ = 'U'
-        ORDER BY {orderClause}
-        '''.format(selectClause=selectClause,
-                   preTable=self.util.quote(preTable),
-                   orderClause=orderClause)
-        return (q,p)
-
-    def createdRowsQuery(self, primaryKeyNames, preTable, postTable, columnNames, p={}):
-        selectClause = ','.join(self.util.quote(columnNames, table='_post'))
-        orderClause = ','.join(self.util.quote(primaryKeyNames, table='_post'))
-
-        q = '''
-        SELECT {selectClause}
-        FROM {preTable} as _post
-        WHERE _post._op_ = 'I'
-        ORDER BY {orderClause}
-        '''.format(selectClause=selectClause,
-                   preTable=self.util.quote(preTable),
-                   orderClause=orderClause)
-        return (q,p)
-        q = '''
-        SELECT {selectClause}
-        FROM {postTable} as _post
-        LEFT JOIN {preTable} as _pre ON {joinClause}
-        WHERE {pkNotNullClause}
-        ORDER BY {orderClause}
-        '''.format(selectClause=selectClause,
-                   preTable=self.util.quote(preTable),
-                   postTable=self.util.quote(postTable),
+        '''.format(changeTable=self.util.quote(changeTable),
                    joinClause=joinClause,
-                   pkNotNullClause=pkNotNullClause,
+                   pkNullClause=pkNullClause,
                    orderClause=orderClause)
+        return (q,p)
+        
+    
+    def deletedRowsQuery(self, primaryKeyNames, changeTable, columnNames, p={}):
+        selectClause = ','.join(self.util.quote(columnNames, table='_lc'))
+        orderClause = ','.join(self.util.quote(primaryKeyNames, table='_lc'))
+
+        q, p = self.latestChangeQuery(primaryKeyNames, changeTable, p=p)
+        q = '''
+        WITH _lc AS (
+          {_lc}
+        )
+        SELECT {selectClause}
+        FROM _lc
+        WHERE _lc._op_ = 'D'
+        ORDER BY {orderClause}
+        '''.format(
+            _lc=q,
+            selectClause=selectClause,
+            preTable=self.util.quote(changeTable),
+            orderClause=orderClause)
+        return (q,p)
+
+    def changedRowsQuery(self, primaryKeyNames, changeTable, columnNames, p={}):
+        selectClause = ','.join(self.util.quote(columnNames, table='_lc'))
+        orderClause = ','.join(self.util.quote(primaryKeyNames, table='_lc'))
+
+        q, p = self.latestChangeQuery(primaryKeyNames, changeTable, p=p)
+        q = '''
+        WITH _lc AS (
+          {_lc}
+        )
+        SELECT {selectClause}
+        FROM _lc
+        WHERE _lc._op_ = 'U'
+        ORDER BY {orderClause}
+        '''.format(
+            _lc=q,
+            selectClause=selectClause,
+            preTable=self.util.quote(changeTable),
+            orderClause=orderClause)
+        return (q,p)
+
+    def createdRowsQuery(self, primaryKeyNames, changeTable, columnNames, p={}):
+        selectClause = ','.join(self.util.quote(columnNames, table='_lc'))
+        orderClause = ','.join(self.util.quote(primaryKeyNames, table='_lc'))
+
+        q, p = self.latestChangeQuery(primaryKeyNames, changeTable, p= p)
+        q = '''
+        WITH _lc AS (
+          {_lc}
+        )
+        SELECT {selectClause}
+        FROM _lc
+        WHERE _lc._op_ = 'I'
+        ORDER BY {orderClause}
+        '''.format(
+            _lc=q,
+            selectClause=selectClause,
+            preTable=self.util.quote(changeTable),
+            orderClause=orderClause)
         return (q,p)
 
     def logQueries(self, table):
@@ -219,20 +243,20 @@ class Differ:
             spec['primaryKeys'] = primaryKeyNames
             
             if not 'deleted' in diff:
-                preTable = spec['tableCloneMap'][table]
-                pqDeletedRows = self.queryFactory.deletedRowsQuery(primaryKeyNames, preTable, table, columnNames)
+                changeTable = spec['tableCloneMap'][table]
+                pqDeletedRows = self.queryFactory.deletedRowsQuery(primaryKeyNames, changeTable, columnNames)
                 deletedRows = self.queryRunner.run(pqDeletedRows)
                 diff['deleted'] = deletedRows
 
             if not 'changed' in diff:
-                preTable = spec['tableCloneMap'][table]
-                pqChangedRows = self.queryFactory.changedRowsQuery(primaryKeyNames, preTable, table, columnNames)
+                changeTable = spec['tableCloneMap'][table]
+                pqChangedRows = self.queryFactory.changedRowsQuery(primaryKeyNames, changeTable, columnNames)
                 changedRows = self.queryRunner.run(pqChangedRows)
                 diff['changed'] = changedRows
 
             if not 'created' in diff:
-                preTable = spec['tableCloneMap'][table]
-                pqCreatedRows = self.queryFactory.createdRowsQuery(primaryKeyNames, preTable, table, columnNames)
+                changeTable = spec['tableCloneMap'][table]
+                pqCreatedRows = self.queryFactory.createdRowsQuery(primaryKeyNames, changeTable, columnNames)
                 createdRows = self.queryRunner.run(pqCreatedRows)
                 diff['created'] = createdRows
 

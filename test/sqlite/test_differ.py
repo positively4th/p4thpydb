@@ -139,7 +139,10 @@ class TestDiffer(unittest.TestCase):
         db.query("UPDATE user SET name = 'author1_1' WHERE id = 1")
         db.query('INSERT INTO user (name, age) VALUES ("author4", 34)')
 
-        db.query('DELETE FROM booK WHERE id = 1')
+        db.query("UPDATE book SET title = 'book1_1' WHERE id = 1")
+        db.query("UPDATE book SET title = 'book1_2' WHERE id = 1")
+        db.query("UPDATE book SET title = 'book1_3' WHERE id = 1")
+        db.query('DELETE FROM book WHERE id = 1')
         db.query("UPDATE book SET title = 'book2_2' WHERE id = 2")
         db.query("UPDATE book SET title = 'book3_3', author = 'author3_3' WHERE id = 3")
         db.query('INSERT INTO book (title, author) VALUES ("book4", "author4")')
@@ -170,9 +173,10 @@ class TestDiffer(unittest.TestCase):
         assert 'book' in spec['tableDiffMap']
         assert 'deleted' in spec['tableDiffMap']['book']
         assert len(spec['tableDiffMap']['book']['deleted']) == 1
-        assert spec['tableDiffMap']['book']['deleted'][0] == {'id': 1, 'title': 'book1', 'author': 'author1'}
+        assert spec['tableDiffMap']['book']['deleted'][0] == {'id': 1, 'title': 'book1_3', 'author': 'author1'}
 
         assert 'changed' in spec['tableDiffMap']['book']
+        #print(spec['tableDiffMap']['book'])
         assert len(spec['tableDiffMap']['book']['changed']) == 2
         assert spec['tableDiffMap']['book']['changed'][0] == {'id': 2, 'title': 'book2_2', 'author': 'author2' }
         assert spec['tableDiffMap']['book']['changed'][1] == {'id': 3, 'title': 'book3_3', 'author': 'author3_3'}

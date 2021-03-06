@@ -76,7 +76,6 @@ class Util():
         names = []
         for key, val in Tools.keyValIter(values):
             names.append(self.p(p, val, name=str(key)))
-        #print(values, names, p)
         return names if sep == None else sep.join(names)
 
     def pStrip(self, q,p):
