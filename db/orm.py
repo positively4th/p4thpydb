@@ -236,7 +236,7 @@ class ORM:
                 '{table}.{key} = {alias}.{key}'.format(table=table, alias=existAlias, key=key) for key in keys
             ]) 
 
-        q = 'DELETE FROM {} WHERE EXISTS ({} WHERE {}) RETURNING *'.format(table, q, where)
+        q = 'DELETE FROM {} WHERE EXISTS ({} WHERE {})'.format(table, q, where)
         T = tss.Ts()
 
         self.query((q, p, T,))
