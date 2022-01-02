@@ -217,17 +217,36 @@ class TestDB(unittest.TestCase):
 
             orm.upsert(tableSpec, [
                 { 'team_id': 't1', 'name': 'nn1', 'country': '1', 'verified': 0, 'index': 10},
-                { 'team_id': 't2', 'name': 'n2', 'country': '2', 'verified': True, 'index': 20}
+                { 'team_id': 't2', 'name': 'n2', 'country': '2', 'verified': True, 'index': 20},
+                { 'team_id': 't3', 'name': 'n3', 'country': '3', 'verified': True, 'index': 20}
             ])
             rows = db.query(orm.select(tableSpec))
             rows.sort(key=lambda row: row['team_id'])
-            assert len(rows) == 2
+            assert len(rows) == 3
             assert 't1' == rows[0]['team_id']
             assert 'nn1' == rows[0]['name']
             assert False == rows[0]['verified']
             assert 't2' == rows[1]['team_id']
             assert 'n2' == rows[1]['name']
             assert True == rows[1]['verified']
+            assert 't3' == rows[2]['team_id']
+            assert 'n3' == rows[2]['name']
+            assert True == rows[1]['verified']
+
+            rows = orm.delete(tableSpec, [
+                { 'team_id': 't1', 'verified': 0},
+                { 'team_id': 't3'}
+                ])
+            assert len(rows) == 2
+            assert 't1' == rows[0]['team_id']
+            assert 'nn1' == rows[0]['name']
+            assert False == rows[0]['verified']
+            assert 't3' == rows[1]['team_id']
+            assert 'n3' == rows[1]['name']
+            assert True == rows[1]['verified']
+
+            rows = db.query(orm.select(tableSpec))
+            assert len(rows) == 1
 
             orm.dropTable(tableSpec)
 

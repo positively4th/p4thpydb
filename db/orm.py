@@ -199,7 +199,48 @@ class ORM:
         q = '{} INNER JOIN ({}) _r ON {}'.format(q, relatedSpec['select'], ' AND '.join(onMap))
         return q,p, T
                                                
-        
+
+    #Todo: Write more efficient method in db specific orm classes.
+    def delete(self, tableSpec, keyMaps):
+        tss = TableSpecModel(tableSpec)
+
+        p = {}
+        keyMapsT = [
+            {
+                col: ColumnSpecModel(tableSpec['columnSpecs'][col]).transform(val)
+                for col, val in Tools.keyValIter(keyMap)
+            } for keyMap in keyMaps
+        ]
+
+
+        table = self.util.quote(tableSpec['name']) 
+        keys = [self.util.quote(key) for key in tableSpec['primaryKeys']]
+
+        qs = [
+            self.pipe.equals(('SELECT {} FROM {}'.format(','.join(keys), table), []), map=keyMap)
+            for keyMap in keyMapsT
+        ]
+
+        p = {}
+        q = 'SELECT * FROM {}'.format(table)
+        q, p, T = self.pipe.any((q,p, None), pipes=[
+            [self.pipe.equals, { 'map': keyMapT, } ]
+            for keyMapT in keyMapsT
+        ])
+
+        res = self.query((q, p, T))
+
+        existAlias = '_eq'
+        q = 'SELECT {} FROM ({}) AS {}'.format(', '.join(keys), q, existAlias)
+        where = ' AND '.join([
+                '{table}.{key} = {alias}.{key}'.format(table=table, alias=existAlias, key=key) for key in keys
+            ]) 
+
+        q = 'DELETE FROM {} WHERE EXISTS ({} WHERE {}) RETURNING *'.format(table, q, where)
+        T = tss.Ts()
+
+        self.query((q, p, T,))
+        return res
 
     def select(self, tableSpec):
         tss = TableSpecModel(tableSpec)

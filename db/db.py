@@ -1,27 +1,23 @@
 from uuid import uuid4
 
+import logging
+log0 = logging.getLogger(__name__)
+
 class DBError(Exception):
     pass
 
 class DB:
 
-    __DEBUG__ = False
-
-    def __init__(self, util):
+    def __init__(self, util, log=log0):
         self.util = util
+        self._log = log
         self.savepoints = []
 
-    @classmethod
-    def dbgout(cls, msg, debug=None):
-        if debug or (debug is None and cls.__DEBUG__):
-            if isinstance(msg, str):
-                print(msg)
-            else:
-                print(*msg)
-        return msg
-
+    @property
+    def log(self):
+        return log0 if self._log is None else self._log
+    
     def exportToFile(self, path, invert=False):
-
         raise DBError('Not implemented')
    
     def startTransaction(self):

@@ -265,7 +265,7 @@ class Differ:
         spec['tableDiffMap'] = tableDiffMap 
 
     def finalize(self, spec):
-        if 'restoreQueries' in spec:
+        if spec and 'restoreQueries' in spec:
             self.queryRunner.run(spec['restoreQueries'], debug=None)
             del spec['restoreQueries']
         

@@ -61,7 +61,8 @@ class Ts:
         if inverse:
             return datetime.fromisoformat(val)
 
-        return val if isinstance(val, str) else val.isoformat()
+        dt =  datetime.fromisoformat(val) if isinstance(val, str) else val
+        return dt.isoformat()
 
     def nullableDateTimeAsStr(val, inverse=False):
         if inverse:

@@ -4,18 +4,21 @@ from .util import Util
 
 
 import psycopg3
-import subprocess
+
+from contrib.p4thpy.subprocesshelper import SubProcessHelper
+from contrib.p4thpy.subprocesshelper import SubProcessError
 
 
 class DB(DB0):
 
 
-    def __init__(self, url=None, *args, **kwargs):
+    def __init__(self, url=None, log=None, **kwargs):
 
-        super().__init__(Util());
+        super().__init__(Util(), log=log);
 
         self._url = self.createURL(**kwargs) if url is None else url
-        self.dbgout(self.url)
+
+        self.log.debug('url %s' % self.url)
         self.db = psycopg3.connect(self.url, autocommit=True)
         self._cursor = None
 
@@ -35,8 +38,8 @@ class DB(DB0):
         return ''.join(res)
     
     def __del__(self):
-        #print('Closing db!')
-        if not self.db is None:
+        self.log.debug('Closing db!')
+        if hasattr(self, 'db'):
             self.db.close()
             self.db = None
             
@@ -55,7 +58,7 @@ class DB(DB0):
             p = P.pStrip(q, p) if stripParams else p
             T = transformer if not transformer is None else Ts.transformerFactory(T, inverse=True)
 
-            self.dbgout(('q,p,T:', q, p, T), debug=debug)
+            self.log.debug('q,p,T: %s, %s, %s' % (q, p, T))
                 
             r = self.cursor.execute(q, p)
 
@@ -71,13 +74,13 @@ class DB(DB0):
                 T(row) for row in dictify(r.fetchall(), description)
             ]
         except psycopg3.errors.InFailedSqlTransaction as e:
-            print("query error:", e.diag.message_primary)
+            self.log.error("query error: %s", e.diag.message_primary)
             #import sys
             #import traceback
             #traceback.print_stack()
             raise e
         except Exception as e:
-            print("query error:", e)
+            self.log.error("query error: %s", str(e))
             #import sys
             #import traceback
             #traceback.print_stack()
@@ -111,6 +114,8 @@ class DB(DB0):
 
         format = 't'
 
+        returnCode = 1
+        
         if (invert):
             args = [
                 'pg_restore',
@@ -122,22 +127,19 @@ class DB(DB0):
                 '--verbose',
                 path,
             ]
-            #print(args)
-            cp = subprocess.run(args)
-            cp.check_returncode()
-            return
+        else:
+            args = [
+                'pg_dump',
+                self.url,
+                '-f', path,
+                '--clean',
+                '--format=' + format,
+                '--verbose',
+            ]
 
-
-        args = [
-            'pg_dump',
-            self.url,
-            '-f', path,
-            '--clean',
-            '--format=' + format,
-            #'--verbose',
-        ]
-        #print(args)
-        subprocess.run(args)
+        self.log.info(str(args))
+        returnCode = SubProcessHelper.run(self.log, args)
+        return returnCode
     
     def startTransaction(self):
         if len(self.savepoints) == 0:

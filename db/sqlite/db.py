@@ -11,17 +11,19 @@ import apsw
 
 class DB(DB0):
 
-    def __init__(self, fileName=':memory:', extensions=[], pragmas=[], attaches={}):
+    def __init__(self, *args, fileName=':memory:', extensions=[],
+                 pragmas=[], attaches={}, log=None):
 
         util = Util();
-        super().__init__(util);
+        super().__init__(util, log=log);
 
+        self.log.info('filename: %s' % fileName)
         self._filePath = fileName
         self.db = apsw.Connection(fileName, statementcachesize=20)
 
         if len(extensions) > 0:
             self.db.enableloadextension(True)
-            self.dbgout('\nLoading extensions is enabled!\n')
+            self.log.info('Loading extensions is enabled!')
             for extension in extensions:
                 print(extension)
                 self.db.loadextension(abspath(extension))
@@ -35,7 +37,7 @@ class DB(DB0):
             self.cursor.execute(pragma)
 
         for schema, filePath in attaches.items():
-            self.dbgout('attaching {} as {}.'.format(filePath, schema))
+            self.log.info('attaching {} as {}.'.format(filePath, schema))
             self.attach(filePath, schema)
 
     
@@ -48,14 +50,16 @@ class DB(DB0):
 
     def __del__(self):
         #print('Closing db!')
-        self.db.close()
+        #if hasattr(self, 'db'):
+        #    self.db.close()
+        pass
         
     def query(self, qp, transformer=None, stripParams=False, debug=None):
         q,p, T = self.util.qpTSplit(qp)
         p = P.pStrip(q, p) if stripParams else p
         T = transformer if not transformer is None else Ts.transformerFactory(T, inverse=True)
         
-        self.dbgout(('q,p,T:', q, p, T), debug=debug)
+        self.log.debug('q,p,T: %s, %s, %s' % (q, p, T))
 
         r = self.cursor.execute(q, p)
         if T is None:
@@ -64,10 +68,6 @@ class DB(DB0):
         return [
             T(row) for row in r.fetchall()
         ]
-    
-    def __del__(self):
-        #print('Closing db!')
-        self.db.close()
     
     def attach(self, filePath, name=None):
         _name = name if name else filePath
