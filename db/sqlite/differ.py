@@ -18,10 +18,12 @@ class QueryFactory(QueryFactory0):
         super().__init__(Util())
         self.pipes = Pipes()
         
-    def columnsQuery(self, p={}, tableRE=None):
+    def columnsQuery(self, p={}, tableRE=None, columnRE=None):
 
         q = '''
-        SELECT m.name as "table", p.name as "column", p.pk as "isPrimaryKey"
+        SELECT m.name as "table", p.name as "column", 
+          m.name || '.' || p.name as "tablecolumn",
+          p.pk as "isPrimaryKey"
         FROM main.sqlite_master AS m
         JOIN main.pragma_table_info(m.name) AS p
         WHERE m.name NOT IN ('sqlite_sequence')
@@ -31,7 +33,12 @@ class QueryFactory(QueryFactory0):
         if tableRE:
             qp = self.pipes.matches(qp, {
                 'table': tableRE,
-            })
+            }, quote=True)
+        if columnRE:
+            qp = self.pipes.matches(qp, {
+            'tablecolumn': columnRE,
+            }, quote=True)
+        qp = self.pipes.columns(qp, ['table', 'column', 'isPrimaryKey'], quote=True)
         return qp
         
     def logQueries(self, table):

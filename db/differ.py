@@ -162,12 +162,12 @@ class Differ:
     def queryRunner(self):
         return self._queryRunner
     
-    def queryColumns(self, tableRE=None):
-        columnsQuery = self.queryFactory.columnsQuery(tableRE=tableRE)
+    def queryColumns(self, tableRE=None, columnRE=None):
+        columnsQuery = self.queryFactory.columnsQuery(tableRE=tableRE, columnRE=columnRE)
         return self.queryRunner.run(columnsQuery)
  
-    def queryTables(self, tableRE=None):
-        columns = self.queryColumns(tableRE=tableRE)
+    def queryTables(self, tableRE=None, columnRE=None):
+        columns = self.queryColumns(tableRE=tableRE, columnRE=columnRE)
         tables = Tools.pipe(columns, [
             [Tools.pluck, [lambda r, i: r['table']], {}],
             [Tools.unique, [], {}]
@@ -210,9 +210,11 @@ class Differ:
     
     def prepare(self, spec={}):
         spec['tableRE'] = spec['tableRE'] if 'tableRE' in spec else None 
-        spec['tables'] = spec['tables'] if 'tables' in spec else self.queryTables(tableRE=spec['tableRE'])
+        spec['columnRE'] = spec['columnRE'] if 'columnRE' in spec else None 
+        spec['tables'] = spec['tables'] if 'tables' in spec \
+            else self.queryTables(tableRE=spec['tableRE'], columnRE=spec['columnRE'])
 
-        spec['columns'] = self.queryColumns(tableRE=spec['tableRE']) \
+        spec['columns'] = self.queryColumns(tableRE=spec['tableRE'], columnRE=spec['columnRE']) \
             if not 'columns' in spec else spec['columns']
 
         nameMap, restorQueries = self.setUpLogging(spec['tables'])

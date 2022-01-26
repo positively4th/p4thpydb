@@ -1,3 +1,5 @@
+from os import path
+
 from ..db import DB as DB0
 from ..ts import Ts
 from .util import Util
@@ -26,7 +28,7 @@ class DB(DB0):
             self.log.info('Loading extensions is enabled!')
             for extension in extensions:
                 print(extension)
-                self.db.loadextension(abspath(extension))
+                self.db.loadextension(path.abspath(extension))
 
         self.db.setrowtrace(DB.__rowFactory__)
         self._cursor = None
@@ -77,21 +79,6 @@ class DB(DB0):
         q = 'ATTACH DATABASE "{}" AS "{}"'.format(filePath, _name)
         #print('q', q)
         cursor.execute(q)
-
-    def exportToFile(self, path, invert=False):
-
-        if (invert):
-            shell = apsw.Shell(db=self.db.connection);
-            #print(shell.process_command, path)
-            shell.command_restore([path])
-            #assert 1 == 0
-
-
-        newCon = apsw.Connection(path, statementcachesize=20)
-        with newCon.backup("main", self.db.connection, "main") as b:
-            while not b.done:
-                b.step(100)
-                #print(b.remaining, b.pagecount, "\r")
 
     def tableExists(self, tableName, columnNames):
         p = {}
