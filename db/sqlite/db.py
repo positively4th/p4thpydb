@@ -1,6 +1,7 @@
 from os import path
 
 from ..db import DB as DB0
+from ..db import DBError
 from ..ts import Ts
 from .util import Util
 
@@ -94,20 +95,28 @@ class DB(DB0):
         b = set(columnNames)
         return a.issubset(b) and b.issubset(a)
                 
-    def exportToFile(self, path, invert=False):
+    def exportToFile(self, path, invert=False, schemas=['main']):
 
         if (invert):
             shell = apsw.Shell(db=self.connection);
             #print(shell.process_command, path)
-            shell.command_restore([path])
-            #assert 1 == 0
+            try:
+                shell.command_restore([path])
+            except apsw.Error as e:
+                self.log.error(e)
+                return -1
+            return 0
 
+
+        if len(schemas) != 1:
+            raise DBError('Exactly one schema must be given.')
 
         newCon = apsw.Connection(path, statementcachesize=20)
-        with newCon.backup("main", self.connection, "main") as b:
+        with newCon.backup(schemas[0], self.connection, schemas[0]) as b:
             while not b.done:
                 b.step(100)
                 #print(b.remaining, b.pagecount, "\r")
+        return 0
 
     @property
     def cursor(self):

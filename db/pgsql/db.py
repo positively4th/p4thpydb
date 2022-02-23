@@ -110,7 +110,7 @@ class DB(DB0):
         b = set(columnNames)
         return a.issubset(b) and b.issubset(a)
     
-    def exportToFile(self, path, invert=False):
+    def exportToFile(self, path, invert=False, schemas=[]):
 
         format = 't'
 
@@ -136,6 +136,9 @@ class DB(DB0):
                 '--format=' + format,
                 '--verbose',
             ]
+            for schema in schemas:
+                args.append('--schema={}'.format(schema))
+                
 
         self.log.info(str(args))
         returnCode = SubProcessHelper.run(self.log, args)

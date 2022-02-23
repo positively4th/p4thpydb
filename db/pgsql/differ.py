@@ -13,11 +13,21 @@ class QueryFactory(QueryFactory0):
     def __init__(self):
         super().__init__(Util())
         self.pipes = Pipes()
+
+    def schemasQuery(self, p={}):
+        q = '''
+        SELECT schema_name AS schema, *
+        FROM information_schema.schemata AS _s
+        '''
+        qp = (q, p)
+
+        return qp
         
+
     def columnsQuery(self, p={}, tableRE=None, columnRE=None):
         q = '''
         SELECT tc.table_schema || '.'  || c.table_name AS table, c.column_name AS column, 
-          c.table_name || '.' || c.column_name AS tablecolumn,
+          tc.table_schema || '.'  || c.table_name || '.' || c.column_name AS _fqn,
           CASE 
            WHEN ccu.column_name IS NOT NULL THEN 1
             ELSE 0
@@ -36,7 +46,7 @@ class QueryFactory(QueryFactory0):
           ccu.column_name = c.column_name
         ) 
         where c.table_schema not in ('pg_catalog', 'information_schema')
-        order by c.table_schema, c.table_name, c.column_name
+        --order by c.table_schema, c.table_name, c.column_name
         '''
         qp = (q, p)
 
@@ -47,11 +57,11 @@ class QueryFactory(QueryFactory0):
 
         if not columnRE is None:
             qp = self.pipes.matches(qp, {
-                'tablecolumn': columnRE,
+                '_fqn': columnRE,
             }, quote=True)
-
+ 
         qp = self.pipes.columns(qp, ['table', 'column', 'isPrimaryKey'], quote=True)
-        print(qp)
+
         return qp
 
     

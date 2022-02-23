@@ -17,6 +17,15 @@ class QueryFactory(QueryFactory0):
     def __init__(self):
         super().__init__(Util())
         self.pipes = Pipes()
+  
+    def schemasQuery(self, p={}):
+
+        q = '''
+        SELECT name AS schema, * 
+        FROM  pragma_database_list
+        '''
+        qp = (q, p)
+        return qp
         
     def columnsQuery(self, p={}, tableRE=None, columnRE=None):
 
