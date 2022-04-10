@@ -1,7 +1,8 @@
 from os import path
+from os.path import abspath
 
 from ..db import DB as DB0
-from ..db import DBError
+from ..db import DBError as DBError0
 from ..ts import Ts
 from .util import Util
 
@@ -11,6 +12,8 @@ import apsw
 #print ("   SQLite lib version",apsw.sqlitelibversion())      # from the sqlite library code
 #print ("SQLite header version",apsw.SQLITE_VERSION_NUMBER)   # from the sqlite header file at compile time
 
+class DBError(DBError0):
+    pass
 
 class DB(DB0):
 
@@ -95,27 +98,38 @@ class DB(DB0):
         b = set(columnNames)
         return a.issubset(b) and b.issubset(a)
                 
-    def exportToFile(self, path, invert=False, schemas=['main']):
+    def exportToFile(self, path, invert=False, explain=False, schemas=['main']):
 
+            
         if (invert):
-            shell = apsw.Shell(db=self.connection);
-            #print(shell.process_command, path)
-            try:
-                shell.command_restore([path])
-            except apsw.Error as e:
-                self.log.error(e)
-                return -1
+            for schema in schemas:
+                try:
+                    shell = apsw.Shell(db=self.connection);
+                    #print(path, ' -> ', con.db_filename('main'))
+
+                    if explain:
+                        print('Restoring database {} from {}.'
+                              .format(self.connection.db_filename(schema), path))
+                        continue
+                    
+                    shell.command_restore([schema, path])
+                except apsw.Error as e:
+                    self.log.error(e)
+                    return -1
             return 0
 
 
-        if len(schemas) != 1:
-            raise DBError('Exactly one schema must be given.')
+        for schema in schemas:
+            if explain:
+                print('Dumping database {} to {}.'
+                              .format(self.connection.db_filename(schema), path))
+                continue
 
-        newCon = apsw.Connection(path, statementcachesize=20)
-        with newCon.backup(schemas[0], self.connection, schemas[0]) as b:
-            while not b.done:
-                b.step(100)
-                #print(b.remaining, b.pagecount, "\r")
+            newCon = apsw.Connection(path, statementcachesize=20)
+            with newCon.backup(schemas[0], self.connection, schemas[0]) as b:
+                while not b.done:
+                    b.step(100)
+                    #print(b.remaining, b.pagecount, "\r")
         return 0
 
     @property

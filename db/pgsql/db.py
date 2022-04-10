@@ -1,4 +1,5 @@
 from ..db import DB as DB0
+from ..db import DBError as DBError0
 from ..ts import Ts
 from .util import Util
 
@@ -8,6 +9,8 @@ import psycopg3
 from contrib.p4thpy.subprocesshelper import SubProcessHelper
 from contrib.p4thpy.subprocesshelper import SubProcessError
 
+class DBError(DBError0):
+    pass
 
 class DB(DB0):
 
@@ -110,16 +113,32 @@ class DB(DB0):
         b = set(columnNames)
         return a.issubset(b) and b.issubset(a)
     
-    def exportToFile(self, path, invert=False, schemas=[]):
+    def exportToFile(self, path, invert=False, explain=False, schemas=[]):
 
+        errs = []
+        def explainSink(out, err):
+            nonlocal errs
+
+            if not out is None:
+                print(SubProcessHelper.decode(out).rstrip())
+            if not err is None:
+                errs.append(SubProcessHelper.decode(err).rstrip()) 
+
+        def runSink(out, err):
+            if not out is None:
+                self.log.debug(SubProcessHelper.decode(out).rstrip())
+            if not err is None:
+                self.log.info(SubProcessHelper.decode(err).rstrip()) 
+
+            
         format = 't'
 
         returnCode = 1
-        
+
         if (invert):
             args = [
                 'pg_restore',
-                '-d', self.url,
+                '-d' if not explain else '-f', self.url if not explain else '-',
                 '--clean',
                 #'--format=' + format,
                 '--single-transaction',
@@ -131,17 +150,23 @@ class DB(DB0):
             args = [
                 'pg_dump',
                 self.url,
-                '-f', path,
+                '-f' if not explain else None, path if not explain else None,
                 '--clean',
                 '--format=' + format,
                 '--verbose',
             ]
-            for schema in schemas:
-                args.append('--schema={}'.format(schema))
-                
 
+        for schema in schemas:
+            args.append('--schema={}'.format(schema))
+                
+        args = [arg for arg in args if not arg is None]
         self.log.info(str(args))
-        returnCode = SubProcessHelper.run(self.log, args)
+        returnCode = SubProcessHelper.run(args, outErrSink=explainSink if explain else runSink, log=self.log)
+
+        if returnCode != 0:
+            for err in errs:
+                self.log.error(err)
+
         return returnCode
     
     def startTransaction(self):

@@ -165,6 +165,7 @@ class Differ:
     def queryColumns(self, tableRE=None, columnRE=None):
         columnsQuery = self.queryFactory.columnsQuery(tableRE=tableRE, columnRE=columnRE)
         return self.queryRunner.run(columnsQuery)
+
     def querySchemas(self):
         schemasQuery = self.queryFactory.schemasQuery()
         return self.queryRunner.run(schemasQuery)

@@ -27,17 +27,18 @@ class QueryFactory(QueryFactory0):
         qp = (q, p)
         return qp
         
-    def columnsQuery(self, p={}, tableRE=None, columnRE=None):
+    def columnsQuery(self, p={}, tableRE=None, columnRE=None, schema='main'):
 
         q = '''
-        SELECT m.name as "table", p.name as "column", 
-          m.name || '.' || p.name as "tablecolumn",
+        SELECT '{schema}.' || m.name AS "table", 
+          p.name AS column, 
+          '{schema}.' || m.name || '.' || p.name AS _fqn,
           p.pk as "isPrimaryKey"
-        FROM main.sqlite_master AS m
-        JOIN main.pragma_table_info(m.name) AS p
+        FROM {schema}.sqlite_master AS m
+        JOIN {schema}.pragma_table_info(m.name) AS p
         WHERE m.name NOT IN ('sqlite_sequence')
         ORDER BY m.name, p.name
-        '''
+        '''.format(schema=schema)
         qp = (q, p)
         if tableRE:
             qp = self.pipes.matches(qp, {
@@ -45,7 +46,7 @@ class QueryFactory(QueryFactory0):
             }, quote=True)
         if columnRE:
             qp = self.pipes.matches(qp, {
-            'tablecolumn': columnRE,
+            '_fqn': columnRE,
             }, quote=True)
         qp = self.pipes.columns(qp, ['table', 'column', 'isPrimaryKey'], quote=True)
         return qp
@@ -155,6 +156,17 @@ class Differ(Differ0):
 
     def __init__(self, db):
         super().__init__(Util(), QueryFactory(), QueryRunner(db))
+
+    def queryColumns(self, tableRE=None, columnRE=None):
+        schemas = self.querySchemas();
+        res = []
+        for schemaRow in schemas:
+            columnsQuery = self.queryFactory.columnsQuery(tableRE=tableRE, columnRE=columnRE,
+                                                          schema=schemaRow['schema'])
+            res = res + self.queryRunner.run(columnsQuery)
+
+        return res
+    
         
 if __name__ == '__main__':
 

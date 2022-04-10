@@ -17,7 +17,7 @@ class DB:
     def log(self):
         return log0 if self._log is None else self._log
     
-    def exportToFile(self, path, invert=False):
+    def exportToFile(self, path, invert=False, explain=False, schemas=[]):
         raise DBError('Not implemented')
    
     def startTransaction(self):
