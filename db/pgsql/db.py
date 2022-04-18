@@ -113,7 +113,7 @@ class DB(DB0):
         b = set(columnNames)
         return a.issubset(b) and b.issubset(a)
     
-    def exportToFile(self, path, invert=False, explain=False, schemas=[]):
+    def exportToFile(self, path, invert=False, explain=False, schemas=None, restoreTables=None):
 
         errs = []
         def explainSink(out, err):
@@ -130,22 +130,34 @@ class DB(DB0):
             if not err is None:
                 self.log.info(SubProcessHelper.decode(err).rstrip()) 
 
+        prettyAction = 'restore' if invert else 'dump'
             
         format = 't'
 
         returnCode = 1
 
+        preQueries = []
+        
         if (invert):
             args = [
                 'pg_restore',
                 '-d' if not explain else '-f', self.url if not explain else '-',
-                '--clean',
+                '--data-only' if not restoreTables is None else None,
+                '--clean' if restoreTables is None else None,
+                '--if-exists' if restoreTables is None else None,
                 #'--format=' + format,
                 '--single-transaction',
-                '--if-exists',
+                '--strict-names',
                 '--verbose',
                 path,
             ]
+            if not restoreTables is None:
+                if len(restoreTables) < 1:
+                    raise DBError('Nothing to restore. No tables given.') 
+                for table in restoreTables:
+                    for schema in schemas:
+                        preQueries.append('TRUNCATE {}.{}'.format(schema, table))
+                    args.append('--table={}'.format(table))
         else:
             args = [
                 'pg_dump',
@@ -156,11 +168,24 @@ class DB(DB0):
                 '--verbose',
             ]
 
-        for schema in schemas:
-            args.append('--schema={}'.format(schema))
+        if not schemas is None:
+            if len(schemas) < 1:
+                    raise DBError('Nothing to restore. No schenas given.') 
+            for schema in schemas:
+                args.append('--schema={}'.format(schema))
+                
                 
         args = [arg for arg in args if not arg is None]
         self.log.info(str(args))
+
+        if len(preQueries) > 0:
+            self.log.warning('Running queries outside {} transaction'.format(prettyAction))
+            preQueries = ['BEGIN'] + preQueries + ['COMMIT']
+            for q in preQueries:
+                self.log.info(q)
+                if not explain:
+                    self.query(q)
+
         returnCode = SubProcessHelper.run(args, outErrSink=explainSink if explain else runSink, log=self.log)
 
         if returnCode != 0:

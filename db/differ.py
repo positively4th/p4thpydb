@@ -162,16 +162,16 @@ class Differ:
     def queryRunner(self):
         return self._queryRunner
     
-    def queryColumns(self, tableRE=None, columnRE=None):
-        columnsQuery = self.queryFactory.columnsQuery(tableRE=tableRE, columnRE=columnRE)
+    def queryColumns(self, schemaRE=None, tableRE=None, columnRE=None):
+        columnsQuery = self.queryFactory.columnsQuery(schemaRE=schemaRE, tableRE=tableRE, columnRE=columnRE)
         return self.queryRunner.run(columnsQuery)
 
     def querySchemas(self):
         schemasQuery = self.queryFactory.schemasQuery()
         return self.queryRunner.run(schemasQuery)
  
-    def queryTables(self, tableRE=None, columnRE=None):
-        columns = self.queryColumns(tableRE=tableRE, columnRE=columnRE)
+    def queryTables(self, schemaRE=None, tableRE=None, columnRE=None):
+        columns = self.queryColumns(schemaRE=schemaRE, tableRE=tableRE, columnRE=columnRE)
         tables = Tools.pipe(columns, [
             [Tools.pluck, [lambda r, i: r['table']], {}],
             [Tools.unique, [], {}]

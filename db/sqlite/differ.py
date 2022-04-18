@@ -18,13 +18,17 @@ class QueryFactory(QueryFactory0):
         super().__init__(Util())
         self.pipes = Pipes()
   
-    def schemasQuery(self, p={}):
+    def schemasQuery(self, p={}, schemaRE=None):
 
         q = '''
         SELECT name AS schema, * 
         FROM  pragma_database_list
         '''
         qp = (q, p)
+        if schemaRE:
+            qp = self.pipes.matches(qp, {
+                'schema': schemaRE,
+            }, quote=True)
         return qp
         
     def columnsQuery(self, p={}, tableRE=None, columnRE=None, schema='main'):
@@ -157,8 +161,12 @@ class Differ(Differ0):
     def __init__(self, db):
         super().__init__(Util(), QueryFactory(), QueryRunner(db))
 
-    def queryColumns(self, tableRE=None, columnRE=None):
-        schemas = self.querySchemas();
+    def querySchemas(self, schemaRE=None):
+        schemasQuery = self.queryFactory.schemasQuery(schemaRE=schemaRE)
+        return self.queryRunner.run(schemasQuery)
+ 
+    def queryColumns(self, schemaRE=None, tableRE=None, columnRE=None):
+        schemas = self.querySchemas(schemaRE=schemaRE);
         res = []
         for schemaRow in schemas:
             columnsQuery = self.queryFactory.columnsQuery(tableRE=tableRE, columnRE=columnRE,

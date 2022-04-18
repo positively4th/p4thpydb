@@ -98,10 +98,13 @@ class DB(DB0):
         b = set(columnNames)
         return a.issubset(b) and b.issubset(a)
                 
-    def exportToFile(self, path, invert=False, explain=False, schemas=['main']):
+    def exportToFile(self, path, invert=False, explain=False, schemas=['main'], restoreTables=None):
 
-            
         if (invert):
+            if not restoreTables is None:
+                if len(restoreTables) < 1:
+                    raise DBError('Nothing to restore. No tables given.') 
+                self.log.warning('Restore table subset is not implemented, restoring all tables.')
             for schema in schemas:
                 try:
                     shell = apsw.Shell(db=self.connection);

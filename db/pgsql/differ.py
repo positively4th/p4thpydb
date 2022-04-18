@@ -24,10 +24,11 @@ class QueryFactory(QueryFactory0):
         return qp
         
 
-    def columnsQuery(self, p={}, tableRE=None, columnRE=None):
+    def columnsQuery(self, p={}, schemaRE=None, tableRE=None, columnRE=None):
         q = '''
         SELECT tc.table_schema || '.'  || c.table_name AS table, c.column_name AS column, 
           tc.table_schema || '.'  || c.table_name || '.' || c.column_name AS _fqn,
+          tc.table_schema AS schema,
           CASE 
            WHEN ccu.column_name IS NOT NULL THEN 1
             ELSE 0
@@ -49,6 +50,11 @@ class QueryFactory(QueryFactory0):
         --order by c.table_schema, c.table_name, c.column_name
         '''
         qp = (q, p)
+
+        if not schemaRE is None:
+            qp = self.pipes.matches(qp, {
+                'schema': schemaRE,
+            }, quote=True)
 
         if not tableRE is None:
             qp = self.pipes.matches(qp, {
