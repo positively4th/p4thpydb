@@ -4,8 +4,11 @@ from ..ts import Ts
 from .util import Util
 
 
-import psycopg3
-
+try:
+    import psycopg as psycopg3
+except NameError as e:
+    import psycopg3
+    
 from contrib.p4thpy.subprocesshelper import SubProcessHelper
 from contrib.p4thpy.subprocesshelper import SubProcessError
 

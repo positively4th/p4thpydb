@@ -31,8 +31,8 @@ class ORM:
     __DEBUG__ = False
     
     def __init__(self, db, util, pipe):
-        self.db = db;
-        self.pipe = pipe;
+        self.db = db
+        self.pipe = pipe
         self.util = util
 
     def query(self, qpT, *args, **kwargs):
@@ -41,7 +41,7 @@ class ORM:
     def createTable(self, *args, **kwargs):
         self._createTable(*args, **kwargs)
         
-    def ensureTable(self, tableSpec): 
+    def ensureTable(self, tableSpec):
         res = not self.tableExists(tableSpec)
         if res:
             self._createTable(tableSpec)
@@ -90,10 +90,9 @@ class ORM:
         
     def tableExists(self, tableSpec):
         model = TableSpecModel(tableSpec)
-        allColumns = ', '.join(self.util.quote(model.allColumns()))
-
-        return self.db.tableExists(tableSpec['name'], model.allColumns());
-            
+        # allColumns = ', '.join(self.util.quote(model.allColumns()))
+        return self.db.tableExists(tableSpec['name'], model.allColumns())
+    
     def insert(self, tableSpec, rows, debug=False):
         model = TableSpecModel(tableSpec)
         models = {

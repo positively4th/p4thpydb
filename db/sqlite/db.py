@@ -1,6 +1,5 @@
 from os import path
 from os.path import abspath
-
 from ..db import DB as DB0
 from ..db import DBError as DBError0
 from ..ts import Ts
@@ -64,7 +63,6 @@ class DB(DB0):
         q,p, T = self.util.qpTSplit(qp)
         p = P.pStrip(q, p) if stripParams else p
         T = transformer if not transformer is None else Ts.transformerFactory(T, inverse=True)
-        
         self.log.debug('q,p,T: %s, %s, %s' % (q, p, T))
 
         r = self.cursor.execute(q, p)
@@ -85,14 +83,17 @@ class DB(DB0):
         cursor.execute(q)
 
     def tableExists(self, tableName, columnNames):
+        sch, tbl = self.util.schemaTableSplit(tableName)
+        sch = 'main' if sch is None else sch
+
         p = {}
         q = '''
-        SELECT m.name as "table", p.name as "column", p.pk as "isPrimaryKey"
-        FROM sqlite_master AS m
+        SELECT m.*, m.name as "table", p.name as "column", p.pk as "isPrimaryKey"
+        FROM `{sch}`.sqlite_master AS m
         JOIN pragma_table_info(m.name) AS p
-        WHERE m.name = {}
+        WHERE m.name = {tbl}
         ORDER BY m.name, p.name
-        '''.format(self.util.p(p, tableName))
+        '''.format(sch=sch, tbl=self.util.p(p, tbl))
         rows = self.query((q,p))
         a = set([row['column'] for row in rows])
         b = set(columnNames)

@@ -46,6 +46,13 @@ class Ts:
         #print('val', val)
         return val if isinstance(val, str) else val.strftime('%Y-%m-%d')
 
+    def floatAsStr(val, inverse=False):
+        if inverse:
+            return float(val)
+
+        #print('val', val)
+        return str(val)
+
     def nullableDateAsStr(val, inverse=False):
         if inverse:
             if val != '':
