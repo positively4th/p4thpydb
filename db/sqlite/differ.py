@@ -31,7 +31,8 @@ class QueryFactory(QueryFactory0):
             }, quote=True)
         return qp
         
-    def columnsQuery(self, p={}, tableRE=None, columnRE=None, schema='main'):
+    def columnsQuery(self, p={}, tableRE=None, columnRE=None, schema='main',
+                     columnMask=['table', 'column', 'isPrimaryKey']):
 
         q = '''
         SELECT '{schema}.' || m.name AS "table", 
@@ -52,7 +53,7 @@ class QueryFactory(QueryFactory0):
             qp = self.pipes.matches(qp, {
             '_fqn': columnRE,
             }, quote=True)
-        qp = self.pipes.columns(qp, ['table', 'column', 'isPrimaryKey'], quote=True)
+        qp = self.pipes.columns(qp, columnMask, quote=True)
         return qp
         
     def logQueries(self, table):

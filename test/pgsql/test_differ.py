@@ -47,19 +47,21 @@ class TestDiffer(unittest.TestCase):
             flatTableColumnRows = queryRunner.run(queryFactory.columnsQuery(tableRE='^u[.].*$|^b[.].*$'))
             #print(flatTableColumnRows)
             self.assertEqual(len(flatTableColumnRows), 6)
-            self.assertEqual(flatTableColumnRows[0], {'table': 'b.book', 'column': 'author', 'isPrimaryKey': 0})
-            assert flatTableColumnRows[1] == {'table': 'b.book', 'column': 'id', 'isPrimaryKey': 1}
-            assert flatTableColumnRows[2] == {'table': 'b.book', 'column': 'title', 'isPrimaryKey': 0}
-            assert flatTableColumnRows[3] == {'table': 'u.user', 'column': 'age', 'isPrimaryKey': 0}
-            assert flatTableColumnRows[4] == {'table': 'u.user', 'column': 'id', 'isPrimaryKey': 1}
-            assert flatTableColumnRows[5] == {'table': 'u.user', 'column': 'name', 'isPrimaryKey': 0}
+            assert {'table': 'b.book', 'column': 'author', 'isPrimaryKey': 0} in flatTableColumnRows
+            assert {'table': 'b.book', 'column': 'id', 'isPrimaryKey': 1} in flatTableColumnRows 
+            assert {'table': 'b.book', 'column': 'title', 'isPrimaryKey': 0} in flatTableColumnRows
+            assert {'table': 'u.user', 'column': 'age', 'isPrimaryKey': 0} in flatTableColumnRows
+            assert {'table': 'u.user', 'column': 'id', 'isPrimaryKey': 1} in flatTableColumnRows
+            assert {'table': 'u.user', 'column': 'name', 'isPrimaryKey': 0} in flatTableColumnRows
 
             allTables = Tools.pipe(flatTableColumnRows, [
                 [Tools.pluck, [lambda r, i: r['table']], {}],
                 [Tools.unique, [], {}]
             ])
             #print(allTables)
-            assert allTables == ['b.book', 'u.user']
+            assert len(allTables) == 2
+            assert 'b.book' in allTables
+            assert 'u.user' in allTables
 
     def test_QueryRunner(self):
         with testing.postgresql.Postgresql() as testpg:        
@@ -141,12 +143,12 @@ class TestDiffer(unittest.TestCase):
 
             assert 'columns' in spec
             assert len(spec['columns']) == 6
-            self.assertEqual(spec['columns'][0], {'table': 'b.book', 'column': 'author', 'isPrimaryKey': 0})
-            assert spec['columns'][1] == {'table': 'b.book', 'column': 'id', 'isPrimaryKey': 1}
-            assert spec['columns'][2] == {'table': 'b.book', 'column': 'title', 'isPrimaryKey': 0}
-            assert spec['columns'][3] == {'table': 'u.user', 'column': 'age', 'isPrimaryKey': 0}
-            assert spec['columns'][4] == {'table': 'u.user', 'column': 'id', 'isPrimaryKey': 1}
-            assert spec['columns'][5] == {'table': 'u.user', 'column': 'name', 'isPrimaryKey': 0}
+            assert {'table': 'b.book', 'column': 'author', 'isPrimaryKey': 0} in spec['columns']
+            assert {'table': 'b.book', 'column': 'id', 'isPrimaryKey': 1} in spec['columns']
+            assert {'table': 'b.book', 'column': 'title', 'isPrimaryKey': 0} in spec['columns']
+            assert {'table': 'u.user', 'column': 'age', 'isPrimaryKey': 0} in spec['columns']
+            assert {'table': 'u.user', 'column': 'id', 'isPrimaryKey': 1} in spec['columns']
+            assert {'table': 'u.user', 'column': 'name', 'isPrimaryKey': 0} in spec['columns']
 
             assert 'tableCloneMap' in spec
             assert len(spec['tableCloneMap']) == 2

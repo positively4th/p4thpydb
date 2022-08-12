@@ -1,3 +1,5 @@
+import json
+import ramda as R
 
 from contrib.p4thpy.model import Model
 from contrib.p4thpy.tools import Tools
@@ -93,26 +95,65 @@ class ORM:
         # allColumns = ', '.join(self.util.quote(model.allColumns()))
         return self.db.tableExists(tableSpec['name'], model.allColumns())
     
-    def insert(self, tableSpec, rows, debug=False):
+    def insert(self, tableSpec, rows, returning=None, debug=False):
+
         model = TableSpecModel(tableSpec)
-        models = {
+        columnModelMap = {
             name: ColumnSpecModel(spec) for name, spec in Tools.keyValIter(tableSpec['columnSpecs'], sort=True)
         }
+        
+        def insertHelper(rows):
+            columns = [col for col in allColumns if col in rows[0]]
+            p = {}
+            placeholders = [
+                [
+                    self.util.p(p, columnModelMap[c].transform(r[c]))
+                    for c in columns
+                ]
+                for r in rows
+            ]
+            placeholders = R.pipe(
+                R.map(lambda group: '(' + ', '.join(group) + ')'),
+                R.join(', '),
+            )(placeholders)
+
+            q = 'INSERT INTO {} ({}) VALUES {}'.format(self.util.quote(tableSpec['name']), ', '.join(self.util.quote(columns)), placeholders)
+            qpT = (q, p,  model.Ts())
+            qpT = self._returning(qpT, returning) 
+            return self.query(qpT, debug=debug)
+
+        if len(rows) < 1:
+            return []
+        
         allColumns = model.allColumns()
-        #print(allColumns, 'allColumns')
+
+        rowGroups = R.group_by(
+            lambda r: json.dumps(sorted(r.keys()))
+        )(rows)
+
+        
+        res = []
+        for _, rows in rowGroups.items():
+            res.append(insertHelper(rows))
+
+        return res
 
 
-        for row in rows:
-            #print('row', row)
-            columns = [col for col in allColumns if col in row]
-            q = 'INSERT INTO {} ({}) VALUES ({})'.format(self.util.quote(tableSpec['name']), ', '.join(self.util.quote(columns)), ','.join([self.ph] * len(columns)))
-            self.query((q, [models[name].transform(row[name]) for name in columns]), debug=debug)
-
+    def _returning(self, qpT, returning=None):
+        q,p,T = self.util.qpTSplit(qpT)
+        if returning is None:
+           _returning = ''
+        elif isinstance(returning, str):
+            _returning = ' RETURNING ' + returning
+        else:
+            _returning = ' RETURNING ' + ' , '.join(self.util.quote(returning))
+        q = '{} {}'.format(q, _returning)
+        return (q, p, T)
             
-    def update(self, tableSpec, rows, debug=False):
+    def update(self, tableSpec, rows, debug=False, returning=None):
         tsModel = TableSpecModel(tableSpec)
         valueColumns = set(tableSpec['columnSpecs'].keys()).difference(set(tableSpec['primaryKeys']))
-        if len(valueColumns) < 1:
+        if len(valueColumns) < 1 and returning is None:
             return
         valSpecs = {
             col: ColumnSpecModel(tableSpec['columnSpecs'][col]) for i, col in Tools.keyValIter(valueColumns, sort=True)
@@ -120,67 +161,48 @@ class ORM:
         keySpecs = {
             col: ColumnSpecModel(tableSpec['columnSpecs'][col]) for i, col in Tools.keyValIter(tableSpec['primaryKeys'], sort=True)
         }
-        for row in rows:
+
+        res = [None] * len(rows)
+        for i, row in enumerate(rows):
             valAssigns = ['{} = {}'.format(self.util.quote(col), self.ph) for col, spec in Tools.keyValIter(valSpecs, sort=True) if col in row]
             keyWheres = ['{} = {}'.format(self.util.quote(col), self.ph) for col, spec in Tools.keyValIter(keySpecs, sort=True) if col in row]
-        
-            q = 'UPDATE {} SET {} WHERE {}'.format(self.util.quote(tableSpec['name']),
-                                               ','.join(valAssigns),
-                                               ' AND '.join(keyWheres))
+
             p = [
                 spec.transform(row[key], inverse=False) for key, spec in Tools.keyValIter(valSpecs, sort=True) if key in row
             ] + [
                 spec.transform(row[key], inverse=False) for key, spec in Tools.keyValIter(keySpecs, sort=True) if key in row
             ]
-            self.query((q, p), debug=debug)
-        
+            
+            if len(valAssigns) > 0:
+                q = 'UPDATE {} SET {} WHERE {}'.format(self.util.quote(tableSpec['name']),
+                                                  ','.join(valAssigns),
+                                                  ' AND '.join(keyWheres)
+                                                  )
+                qpT = self._returning((q, p, tsModel.Ts()), returning)
+            else:
+                q = 'SELECT {} FROM {} WHERE {}'.format(','.join(self.util.quote(returning)),
+                                                        self.util.quote(tableSpec['name']),
+                                                        ' AND '.join(keyWheres)
+                                                        )
+                qpT = (q, p, tsModel.Ts())
+            updRow = self.query(qpT, debug=debug)
+            if not updRow is None and len(updRow) == 1:
+                res[i] = updRow[0]
+        return res if returning is not None else None
+    
     def upsert(self, tableSpec, rows, batchSize=200, debug=False):
-        tsModel = TableSpecModel(tableSpec)
 
-        completed = 0
-        while completed < len(rows):
-            batch = rows[completed:completed+batchSize]
+        bs = len(rows) if batchSize is None else batchSize
 
-            keyMaps = [Tools.sortByKeys({
-                col: ColumnSpecModel(tableSpec['columnSpecs'][col]).transform(row[col]) for i, col in Tools.keyValIter(tableSpec['primaryKeys'])
-                }) for row in batch]
+        while len(rows) > 0:
+            batch = rows[0:bs]
+            rows = rows[bs:len(rows)]
+            updRes = self.update(tableSpec, batch, returning=tableSpec['primaryKeys'], debug=debug)
+            insRes = [batch[i] for i, r in enumerate(updRes) if r is None]
+            insRes = self.insert(tableSpec, insRes, returning=tableSpec['primaryKeys'], debug=debug)
 
-            qpT = self.select(tableSpec)
-            #print(qpT, 'qpT')
-            #assert 1 == 0
-            qpT = self.pipe.concat(qpT, pipes=[
-                [self.pipe.any, {
-                    'pipes': [
-                        [self.pipe.equals, {
-                            'map': keyMap,
-                            'quote': True,
-                        }] for keyMap in keyMaps
-                    ]
-                }],
-                [self.pipe.columns, {'columns': tableSpec['primaryKeys'], 'quote': True}],
-            ])
-            existingKeys = self.query(qpT, debug=False)
-            #print('existingKeys', existingKeys)
-            insertRows = []
-            updateRows = []
-
-            for i,row in enumerate(batch): 
-                keyMap = keyMaps[i]
-                try:
-                    keyIndex = existingKeys.index(keyMap)
-                    updateRows.append(row)
-                    existingKeys.pop(keyIndex)
-                except ValueError as e:
-                    #print('----')
-                    #print(existingKeys)
-                    #print(keyMap)
-                    #print('----')
-                    insertRows.append(row)
-            #print('Inserts:', len(insertRows), 'Updates:', len(updateRows))
-            self.insert(tableSpec, insertRows, debug=debug)
-            self.update(tableSpec, updateRows, debug=debug)
-
-            completed = completed + len(batch)
+        return rows
+    
 
     def join(self, qpT, relatedSpec): 
 

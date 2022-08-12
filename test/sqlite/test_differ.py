@@ -35,19 +35,19 @@ class TestDiffer(unittest.TestCase):
         flatTableColumnRows = queryRunner.run(queryFactory.columnsQuery())
         #print(flatTableColumnRows)
         assert len(flatTableColumnRows) == 6
-        assert flatTableColumnRows[0] == {'table': 'book', 'column': 'author', 'isPrimaryKey': 0}
-        assert flatTableColumnRows[1] == {'table': 'book', 'column': 'id', 'isPrimaryKey': 1}
-        assert flatTableColumnRows[2] == {'table': 'book', 'column': 'title', 'isPrimaryKey': 0}
-        assert flatTableColumnRows[3] == {'table': 'user', 'column': 'age', 'isPrimaryKey': 0}
-        assert flatTableColumnRows[4] == {'table': 'user', 'column': 'id', 'isPrimaryKey': 1}
-        assert flatTableColumnRows[5] == {'table': 'user', 'column': 'name', 'isPrimaryKey': 0}
+        assert {'table': 'main.book', 'column': 'author', 'isPrimaryKey': 0} in flatTableColumnRows 
+        assert flatTableColumnRows[1] == {'table': 'main.book', 'column': 'id', 'isPrimaryKey': 1}
+        assert flatTableColumnRows[2] == {'table': 'main.book', 'column': 'title', 'isPrimaryKey': 0}
+        assert flatTableColumnRows[3] == {'table': 'main.user', 'column': 'age', 'isPrimaryKey': 0}
+        assert flatTableColumnRows[4] == {'table': 'main.user', 'column': 'id', 'isPrimaryKey': 1}
+        assert flatTableColumnRows[5] == {'table': 'main.user', 'column': 'name', 'isPrimaryKey': 0}
 
         allTables = Tools.pipe(flatTableColumnRows, [
             [Tools.pluck, [lambda r, i: r['table']], {}],
             [Tools.unique, [], {}]
         ])
         #print(allTables)
-        assert allTables == ['book', 'user']
+        self.assertSetEqual(set(allTables), set(['main.book', 'main.user']))
 
         #SqliteQueryRunner: exportToFile
         dumpPath = path.join(tempfile.gettempdir(), str(uuid4()))
@@ -109,27 +109,29 @@ class TestDiffer(unittest.TestCase):
 
         assert 'columns' in spec
         assert len(spec['columns']) == 6
-        assert spec['columns'][0] == {'table': 'book', 'column': 'author', 'isPrimaryKey': 0}
-        assert spec['columns'][1] == {'table': 'book', 'column': 'id', 'isPrimaryKey': 1}
-        assert spec['columns'][2] == {'table': 'book', 'column': 'title', 'isPrimaryKey': 0}
-        assert spec['columns'][3] == {'table': 'user', 'column': 'age', 'isPrimaryKey': 0}
-        assert spec['columns'][4] == {'table': 'user', 'column': 'id', 'isPrimaryKey': 1}
-        assert spec['columns'][5] == {'table': 'user', 'column': 'name', 'isPrimaryKey': 0}
+        assert {'table': 'main.book', 'column': 'author', 'isPrimaryKey': 0} in spec['columns'] 
+        assert {'table': 'main.book', 'column': 'id', 'isPrimaryKey': 1} in spec['columns']
+        assert {'table': 'main.book', 'column': 'title', 'isPrimaryKey': 0} in spec['columns']
+        assert {'table': 'main.user', 'column': 'age', 'isPrimaryKey': 0}  in spec['columns']
+        assert {'table': 'main.user', 'column': 'id', 'isPrimaryKey': 1} in spec['columns']
+        assert {'table': 'main.user', 'column': 'name', 'isPrimaryKey': 0} in spec['columns']
 
         assert 'tableCloneMap' in spec
         assert len(spec['tableCloneMap']) == 2
-        assert 'book' in spec['tableCloneMap']['book']
-        assert 'user' in spec['tableCloneMap']['user']
+        #print('tableCloneMap', spec['tableCloneMap'])
+        assert 'main_book' in spec['tableCloneMap']['main.book']
+        assert 'main_user' in spec['tableCloneMap']['main.user']
 
         differ.diff(spec)
         #print(spec)
         assert 'tableDiffMap' in spec
-        assert 'user' in spec['tableDiffMap']
-        assert 'deleted' in spec['tableDiffMap']['user']
-        assert len(spec['tableDiffMap']['user']['deleted']) == 0
-        assert 'book' in spec['tableDiffMap']
-        assert 'deleted' in spec['tableDiffMap']['book']
-        assert len(spec['tableDiffMap']['book']['deleted']) == 0
+        assert 'main.user' in spec['tableDiffMap']
+        assert 'deleted' in spec['tableDiffMap']['main.user']
+        assert len(spec['tableDiffMap']['main.user']['deleted']) == 0
+        assert 'main.book' in spec['tableDiffMap']
+        assert 'deleted' in spec['tableDiffMap']['main.book']
+        assert len(spec['tableDiffMap']['main.book']['deleted']) == 0
+        differ.finalize(spec)
 
 
         #DBDiff: differ - All diffs
@@ -154,37 +156,36 @@ class TestDiffer(unittest.TestCase):
         assert spec['primaryKeys'] == ['id']
 
         assert 'tableDiffMap' in spec
-        assert 'user' in spec['tableDiffMap']
+        assert 'main.user' in spec['tableDiffMap']
 
-        assert 'deleted' in spec['tableDiffMap']['user']
-        assert len(spec['tableDiffMap']['user']['deleted']) == 2
-        assert spec['tableDiffMap']['user']['deleted'][0] == {'id': 2, 'name': 'author2', 'age': 32}
-        assert spec['tableDiffMap']['user']['deleted'][1] == {'id': 3, 'name': 'author3', 'age': 33}
+        assert 'deleted' in spec['tableDiffMap']['main.user']
+        assert len(spec['tableDiffMap']['main.user']['deleted']) == 2
+        assert spec['tableDiffMap']['main.user']['deleted'][0] == {'id': 2, 'name': 'author2', 'age': 32}
+        assert spec['tableDiffMap']['main.user']['deleted'][1] == {'id': 3, 'name': 'author3', 'age': 33}
 
-        assert 'changed' in spec['tableDiffMap']['user']
-        assert len(spec['tableDiffMap']['user']['changed']) == 1
-        assert spec['tableDiffMap']['user']['changed'][0] == {'id': 1, 'name': 'author1_1', 'age': 31}
+        assert 'changed' in spec['tableDiffMap']['main.user']
+        assert len(spec['tableDiffMap']['main.user']['changed']) == 1
+        assert spec['tableDiffMap']['main.user']['changed'][0] == {'id': 1, 'name': 'author1_1', 'age': 31}
 
-        assert 'created' in spec['tableDiffMap']['user']
-        assert len(spec['tableDiffMap']['user']['created']) == 1
-        assert spec['tableDiffMap']['user']['created'][0] == {'id': 4, 'name': 'author4', 'age': 34}
+        assert 'created' in spec['tableDiffMap']['main.user']
+        assert len(spec['tableDiffMap']['main.user']['created']) == 1
+        assert spec['tableDiffMap']['main.user']['created'][0] == {'id': 4, 'name': 'author4', 'age': 34}
 
 
-        assert 'book' in spec['tableDiffMap']
-        assert 'deleted' in spec['tableDiffMap']['book']
-        assert len(spec['tableDiffMap']['book']['deleted']) == 1
-        assert spec['tableDiffMap']['book']['deleted'][0] == {'id': 1, 'title': 'book1_3', 'author': 'author1'}
+        assert 'main.book' in spec['tableDiffMap']
+        assert 'deleted' in spec['tableDiffMap']['main.book']
+        assert len(spec['tableDiffMap']['main.book']['deleted']) == 1
+        assert spec['tableDiffMap']['main.book']['deleted'][0] == {'id': 1, 'title': 'book1_3', 'author': 'author1'}
 
-        assert 'changed' in spec['tableDiffMap']['book']
-        #print(spec['tableDiffMap']['book'])
-        assert len(spec['tableDiffMap']['book']['changed']) == 2
-        assert spec['tableDiffMap']['book']['changed'][0] == {'id': 2, 'title': 'book2_2', 'author': 'author2' }
-        assert spec['tableDiffMap']['book']['changed'][1] == {'id': 3, 'title': 'book3_3', 'author': 'author3_3'}
+        assert 'changed' in spec['tableDiffMap']['main.book']
+        assert len(spec['tableDiffMap']['main.book']['changed']) == 2
+        assert spec['tableDiffMap']['main.book']['changed'][0] == {'id': 2, 'title': 'book2_2', 'author': 'author2' }
+        assert spec['tableDiffMap']['main.book']['changed'][1] == {'id': 3, 'title': 'book3_3', 'author': 'author3_3'}
 
-        assert 'created' in spec['tableDiffMap']['book']
-        assert len(spec['tableDiffMap']['book']['created']) == 2
-        assert spec['tableDiffMap']['book']['created'][0] == {'id': 4, 'title': 'book4', 'author': 'author4'}
-        assert spec['tableDiffMap']['book']['created'][1] == {'id': 5, 'title': 'book5', 'author': 'author5'}
+        assert 'created' in spec['tableDiffMap']['main.book']
+        assert len(spec['tableDiffMap']['main.book']['created']) == 2
+        assert spec['tableDiffMap']['main.book']['created'][0] == {'id': 4, 'title': 'book4', 'author': 'author4'}
+        assert spec['tableDiffMap']['main.book']['created'][1] == {'id': 5, 'title': 'book5', 'author': 'author5'}
 
 
 if __name__ == '__main__':
