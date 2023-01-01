@@ -4,6 +4,7 @@ import ramda as R
 from contrib.p4thpy.model import Model
 from contrib.p4thpy.tools import Tools
 
+
 class ColumnSpecModel(Model):
 
     def __init__(self, row, *args, **kwargs):
@@ -12,6 +13,7 @@ class ColumnSpecModel(Model):
     def transform(self, val, inverse=False):
         return val if 'transform' not in self else (self['transform'](val, inverse))
 
+
 class TableSpecModel(Model):
 
     def __init__(self, row, *args, **kwargs):
@@ -19,14 +21,12 @@ class TableSpecModel(Model):
 
     def allColumns(self, sort=True, quote=True):
         return [column for column, spec in Tools.keyValIter(self['columnSpecs'], sort=sort)]
-        #return [DB.quote(column, quote=quote) for column, spec in Tools.keyValIter(self['columnSpecs'], sort=sort)]
 
     def Ts(self, inverse=False):
         return {
             name: spec['transform'] for name, spec in Tools.keyValIter(self['columnSpecs'], sort=True) if 'transform' in spec
         }
 
-    
 
 class ORM:
 
@@ -185,12 +185,12 @@ class ORM:
                                                         ' AND '.join(keyWheres)
                                                         )
                 qpT = (q, p, tsModel.Ts())
-            updRow = self.query(qpT, debug=debug)
+            updRow = self.query(qpT, debug=debug, fetchAll=True)
             if not updRow is None and len(updRow) == 1:
                 res[i] = updRow[0]
         return res if returning is not None else None
     
-    def upsert(self, tableSpec, rows, batchSize=200, debug=False):
+    def upsert(self, tableSpec, rows, fetchAll=False, batchSize=200, debug=False):
 
         bs = len(rows) if batchSize is None else batchSize
 
@@ -201,8 +201,9 @@ class ORM:
             insRes = [batch[i] for i, r in enumerate(updRes) if r is None]
             insRes = self.insert(tableSpec, insRes, returning=tableSpec['primaryKeys'], debug=debug)
 
+        if fetchAll:
+            return [r for r in rows]
         return rows
-    
 
     def join(self, qpT, relatedSpec): 
 
@@ -219,10 +220,9 @@ class ORM:
         q = 'SELECT _l.*, {} FROM ({}) _l'.format(', '.join(aliases), q)
         q = '{} INNER JOIN ({}) _r ON {}'.format(q, relatedSpec['select'], ' AND '.join(onMap))
         return q,p, T
-                                               
 
     #Todo: Write more efficient method in db specific orm classes.
-    def delete(self, tableSpec, keyMaps):
+    def delete(self, tableSpec, keyMaps, fetchAll=False):
         tss = TableSpecModel(tableSpec)
 
         p = {}
@@ -261,6 +261,8 @@ class ORM:
         T = tss.Ts()
 
         self.query((q, p, T,))
+        if fetchAll:
+            return [r for r in res]
         return res
 
     def select(self, tableSpec):

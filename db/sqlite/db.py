@@ -16,6 +16,21 @@ class DBError(DBError0):
 
 class DB(DB0):
 
+    @classmethod
+    def createPipes(cls):
+        from .pipes import Pipes as _SQLITEPipe
+        return _SQLITEPipe()
+
+    @classmethod
+    def createORM(cls, db):
+        from .orm import ORM as _SQLITEORM
+        return _SQLITEORM(db)
+
+    @classmethod
+    def createUtil(cls):
+        from .util import Util as _SQLiteUtil
+        return _SQLiteUtil()
+    
     def __init__(self, *args, fileName=':memory:', extensions=[],
                  pragmas=[], attaches={}, log=None):
 
@@ -25,7 +40,7 @@ class DB(DB0):
         self.log.info('filename: %s' % fileName)
         self._filePath = fileName
         self.db = apsw.Connection(fileName, statementcachesize=20)
-
+        self.db.setbusytimeout(15*1000)
         if len(extensions) > 0:
             self.db.enableloadextension(True)
             self.log.info('Loading extensions is enabled!')
@@ -58,21 +73,26 @@ class DB(DB0):
         #if hasattr(self, 'db'):
         #    self.db.close()
         pass
-        
-    def query(self, qp, transformer=None, stripParams=False, debug=None):
-        q,p, T = self.util.qpTSplit(qp)
+
+    def _queryHelper(self, qpT, transformer=None, stripParams=False, debug=None):
+
+        def createFetchOne(_cursor):
+
+            def fetchOne():
+                return _cursor.fetchone()
+
+            return fetchOne
+
+
+        q,p, T = self.util.qpTSplit(qpT)
         p = P.pStrip(q, p) if stripParams else p
-        T = transformer if not transformer is None else Ts.transformerFactory(T, inverse=True)
+        #T = transformer if not transformer is None else Ts.transformerFactory(T, inverse=True)
         self.log.debug('q,p,T: %s, %s, %s' % (q, p, T))
 
-        r = self.cursor.execute(q, p)
-        if T is None:
-            return r.fetchall()
+        cursor = self.cursor
+        r = cursor.execute(q, p)
+        return createFetchOne(cursor)
 
-        return [
-            T(row) for row in r.fetchall()
-        ]
-    
     def attach(self, filePath, name=None):
         _name = name if name else filePath
 
@@ -138,9 +158,10 @@ class DB(DB0):
 
     @property
     def cursor(self):
-        if self._cursor is None:
-            self._cursor = self.db.cursor()
-        return self._cursor
+        #if self._cursor is None:
+        #    self._cursor = self.db.cursor()
+        #return self._cursor
+        return self.db.cursor()
     
     @property
     def filePath(self):

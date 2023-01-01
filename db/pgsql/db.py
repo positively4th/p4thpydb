@@ -1,8 +1,9 @@
+import psycopg
+
 from ..db import DB as DB0
 from ..db import DBError as DBError0
-from ..ts import Ts
 from .util import Util
-
+import re
 
 try:
     import psycopg as psycopg3
@@ -12,14 +13,35 @@ except NameError as e:
 from contrib.p4thpy.subprocesshelper import SubProcessHelper
 from contrib.p4thpy.subprocesshelper import SubProcessError
 
+modulusReplacePattern = [
+    r'(?:(?!(s[ );])))',
+    r'(?:(?![(][a-zA-Z][^0-9a-zA-Z]*[)]s[ );]))'
+]
+modulusReplacePattern = r'%(?!(?:{}))'.format('|'.join(modulusReplacePattern))
+
+
 class DBError(DBError0):
     pass
 
 class DB(DB0):
 
+    @classmethod
+    def createPipes(cls):
+        from .pipes import Pipes
+        return Pipes()
+
+    @classmethod
+    def createORM(cls, db):
+        from .orm import ORM as _PGORM
+        return _PGORM(db)
+
+    @classmethod
+    def createUtil(cls):
+        from .util import Util as _PGUtil
+        return _PGUtil()
 
     def __init__(self, url=None, log=None, **kwargs):
-
+        #print('\n', url, '\n')
         super().__init__(Util(), log=log);
 
         self._url = self.createURL(**kwargs) if url is None else url
@@ -48,48 +70,71 @@ class DB(DB0):
         if hasattr(self, 'db'):
             self.db.close()
             self.db = None
-            
-    def query(self, qp, transformer=None, stripParams=False, debug=None):
 
-        def dictify(rows, description):
-            names = [c.name for c in description]
-            return [
-                dict(zip(names, row)) for row in rows
-            ]
+    def _queryHelper(self, qpT, transformer=None, stripParams=False, fetch=True, debug=None):
+        def fixModOp(q):
+            qq = q
+            qqq = qq + ' '
+            while qq != qqq:
+                qqq = re.sub(modulusReplacePattern, '%%', qq)
+                qq = qqq
+            return qq
 
+        def createFetchOne(_cursor):
+
+            def fetchEmpty():
+                pass
+
+            if not _cursor.description:
+                return fetchEmpty
+
+            names = [c.name for c in _cursor.description] \
+                if _cursor.description is not None else []
+
+            def fetchOne():
+                if _cursor.closed:
+                    return
+                values = _cursor.fetchone()
+                if values:
+                    return dict(zip(names, values))
+
+            return fetchOne
 
         try:
-
-            q,p, T = self.util.qpTSplit(qp)
-            p = P.pStrip(q, p) if stripParams else p
-            T = transformer if not transformer is None else Ts.transformerFactory(T, inverse=True)
+            util = self.createUtil()
+            q, p, T = self.util.qpTSplit(qpT)
+            q = fixModOp(q)
+            p = util.pStrip(q, p) if stripParams else p
 
             self.log.debug('q,p,T: %s, %s, %s' % (q, p, T))
-                
-            r = self.cursor.execute(q, p)
 
+            cursor = self.cursor;
+            r = cursor.execute(q, p)
+            description = cursor.description
 
-            description = self.cursor.description
-            if (description is None):
-                return []
-        
-            if T is None:
-                return dictify(r.fetchall(), description)
-        
-            return [
-                T(row) for row in dictify(r.fetchall(), description)
-            ]
+            #assert description is not None
+            #if (description is None):
+            #    return []
+            return createFetchOne(cursor)
+
         except psycopg3.errors.InFailedSqlTransaction as e:
             self.log.error("query error: %s", e.diag.message_primary)
-            #import sys
-            #import traceback
-            #traceback.print_stack()
+            # import sys
+            # import traceback
+            # traceback.print_stack()
             raise e
         except Exception as e:
-            self.log.error("query error: %s", str(e))
-            #import sys
-            #import traceback
-            #traceback.print_stack()
+            print('')
+            print('')
+            print('')
+            self.log.error("Unknown error: %s", str(e))
+            for x in qpT: print(x)
+            import sys
+            import traceback
+            traceback.print_stack()
+            print('')
+            print('')
+            print('')
             raise e
 
     def tableExists(self, table, columnNames):
@@ -101,7 +146,7 @@ class DB(DB0):
         LIMIT 2
         """.format()
         p = [table, 0 if schema else 1, schema]
-        rows = self.query((q,p), debug=False)
+        rows = [r for r in self.query((q,p), debug=False)]
         if len(rows) != 1:
             return False
 
@@ -218,10 +263,8 @@ class DB(DB0):
         
     @property
     def cursor(self):
-        if self._cursor is None:
-            self._cursor = self.db.cursor()
-        return self._cursor
-    
+        return self.db.cursor()
+
     @property
     def connection(self):
         return self.db

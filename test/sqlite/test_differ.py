@@ -28,8 +28,8 @@ class TestDiffer(unittest.TestCase):
         db.query('INSERT INTO book (title, author) VALUES ("book2", "author2")')
         db.query('INSERT INTO book (title, author) VALUES ("book3", "author3")')
 
-        queryRunner = QueryRunner(db);
-        queryFactory = QueryFactory();
+        queryRunner = QueryRunner(db)
+        queryFactory = QueryFactory()
 
         #SqliteQueryFactory: columnsQuery
         flatTableColumnRows = queryRunner.run(queryFactory.columnsQuery())

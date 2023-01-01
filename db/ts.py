@@ -1,5 +1,7 @@
 from datetime import datetime
 import jsonpickle
+import dill
+
 
 class Ts:
 
@@ -14,10 +16,11 @@ class Ts:
                 }
             except Exception as e:
                 print(transformMap.keys())
-                print(rows.keys())
+                print(row.keys())
                 raise e
 
         return _
+
 
     def str(val, inverse=False):
         return None if val is None else str(val)
@@ -37,7 +40,16 @@ class Ts:
         return bool(val) if inverse else int(val)
 
     def json(val, inverse=False):
-        return jsonpickle.loads(val) if inverse else jsonpickle.dumps(val)
+        if inverse:
+            return jsonpickle.loads(val)
+
+        return jsonpickle.dumps(val)
+
+    def nullableJSON(val, inverse=False):
+        if inverse:
+            return val if val is None else jsonpickle.loads(val)
+
+        return jsonpickle.dumps(val)
 
     def dateAsStr(val, inverse=False):
         if inverse:
@@ -68,7 +80,7 @@ class Ts:
         if inverse:
             return datetime.fromisoformat(val)
 
-        dt =  datetime.fromisoformat(val) if isinstance(val, str) else val
+        dt = datetime.fromisoformat(val) if isinstance(val, str) else val
         return dt.isoformat()
 
     def nullableDateTimeAsStr(val, inverse=False):
@@ -81,12 +93,13 @@ class Ts:
             return ''
         return val if isinstance(val, str) else val.isoformat()
 
+    @staticmethod
     def categoryAsStr(cats=[]):
 
         def _(val, inverse=False):
             if inverse:
                 return val
-            assert(val in cats)
+            assert val in cats, 'Category {} not in {}.'.format(val, cats)
             return val
 
         return _
@@ -98,4 +111,19 @@ class Ts:
         #res = val.tolist()
         #res = np.asarray(val)
         res = jsonpickle.encode(val)
+        return res
+
+    #def Class(val, inverse=False):
+    #    if inverse:
+    #        res = dill.load(val)
+    #        return res
+    #    res = dill.dumps(val)
+    #    return res
+
+    @staticmethod
+    def Classes(val, inverse=False):
+        if inverse:
+            res = dill.loads(val)
+            return res
+        res = dill.dumps(val)
         return res

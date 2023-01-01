@@ -70,7 +70,7 @@ class TestDB(unittest.TestCase):
             db.query("INSERT INTO {} (id, a, b, c) VALUES ('333', 30, 30, 30)".format(util.quote('t mp._tstrvec3')));
 
             #attached
-            row = db.query("SELECT * FROM {} WHERE id = '321'".format(util.quote('t mp._tstrvec3')));
+            row = db.query("SELECT * FROM {} WHERE id = '321'".format(util.quote('t mp._tstrvec3')), fetchAll=True)
             self.assertEqual(len(row), 1)
             row = row[0]
             self.assertEqual({
@@ -175,14 +175,14 @@ class TestDB(unittest.TestCase):
                 { 'team_id': 't2', 'name': 'n2', 'country': '2', 'verified': 0, }
             ], debug=False)
             #assert 1 == 0
-            rows = db.query(orm.select(tableSpec))
+            rows = db.query(orm.select(tableSpec), fetchAll=True)
             rows.sort(key=lambda row: row['team_id'])
             assert 'n1' == rows[0]['name']
             assert True == rows[0]['verified']
             assert 'n2' == rows[1]['name']
             assert False == rows[1]['verified']
 
-            rows = db.query(orm.view(tableSpec, view='prefixed'))
+            rows = db.query(orm.view(tableSpec, view='prefixed'), fetchAll=True)
             rows.sort(key=lambda row: row['team_id'])
             assert '__n1' == rows[0]['name']
             assert True == rows[0]['verified']
@@ -193,7 +193,7 @@ class TestDB(unittest.TestCase):
                 { 'team_id': 't1', 'verified': False, },
                 { 'team_id': 't2', 'verified': 1, }
             ])
-            rows = db.query(orm.select(tableSpec))
+            rows = db.query(orm.select(tableSpec), fetchAll=True)
             rows.sort(key=lambda row: row['team_id'])
             assert 'n1' == rows[0]['name']
             assert False == rows[0]['verified']
@@ -209,7 +209,7 @@ class TestDB(unittest.TestCase):
             orm.upsert(tableSpec, [
                 { 'team_id': 't2', 'name': 'n2', 'country': '2', 'verified': 0, 'index': 0}
             ])
-            rows = db.query(orm.select(tableSpec))
+            rows = db.query(orm.select(tableSpec), fetchAll=True)
             rows.sort(key=lambda row: row['team_id'])
             assert len(rows) == 1
             assert 'n2' == rows[0]['name']
@@ -220,7 +220,7 @@ class TestDB(unittest.TestCase):
                 { 'team_id': 't2', 'name': 'n2', 'country': '2', 'verified': True, 'index': 20},
                 { 'team_id': 't3', 'name': 'n3', 'country': '3', 'verified': True, 'index': 20}
             ])
-            rows = db.query(orm.select(tableSpec))
+            rows = db.query(orm.select(tableSpec), fetchAll=True)
             rows.sort(key=lambda row: row['team_id'])
             assert len(rows) == 3
             assert 't1' == rows[0]['team_id']
@@ -236,7 +236,7 @@ class TestDB(unittest.TestCase):
             rows = orm.delete(tableSpec, [
                 { 'team_id': 't1', 'verified': 0},
                 { 'team_id': 't3'}
-                ])
+                ], fetchAll=True)
             assert len(rows) == 2
             assert 't1' == rows[0]['team_id']
             assert 'nn1' == rows[0]['name']
@@ -245,7 +245,7 @@ class TestDB(unittest.TestCase):
             assert 'n3' == rows[1]['name']
             assert True == rows[1]['verified']
 
-            rows = db.query(orm.select(tableSpec))
+            rows = db.query(orm.select(tableSpec), fetchAll=True)
             assert len(rows) == 1
 
             orm.dropTable(tableSpec)
@@ -281,7 +281,7 @@ class TestDB(unittest.TestCase):
 
             qpT = orm.select(tableSpec)
             qpT = pipes.order(qpT, ['id'])
-            rows = db.query(qpT, debug=False)
+            rows = [r for r in db.query(qpT, debug=False)]
             #for row in rows:
             #    print(row)
             assert rows[0]['id'] == '111'
@@ -298,7 +298,7 @@ class TestDB(unittest.TestCase):
                 {'a': 1, 'b': 1, 'c': 1},
                 {'a': 3, 'b': 2, 'c': 1},
             ])
-            rows = db.query((q,p, T))
+            rows = [r for r in db.query((q,p, T))]
             assert len(rows) == 2
 
             # alias
@@ -314,7 +314,7 @@ class TestDB(unittest.TestCase):
             }, quote=False)
             qpT = pipes.order(qpT, ['_id_'])
             qpT = pipes.limit(qpT, 1)
-            rows = db.query(qpT, debug=False)
+            rows = [r for r in db.query(qpT, debug=False)]
             assert len(rows) == 1
             assert rows[0]['_id_'] == '111'
             assert rows[0]['_a_'] == 20
@@ -326,7 +326,7 @@ class TestDB(unittest.TestCase):
                 {'id': r'[13].[13]'},
             ])
             qpT = pipes.order(qpT, ['id'])
-            rows = db.query((q,p, T), debug=None)
+            rows = [r for r in db.query((q,p, T), debug=None)]
             assert len(rows) == 4
             assert rows[0]['id'] == '111'
             assert rows[1]['id'] == '123'
@@ -339,7 +339,7 @@ class TestDB(unittest.TestCase):
             qpT = pipes.concat((q, p), pipes=[ 
                 [pipes.equals, {'map': {'a': 1, 'b': 1, 'c': 1}}]
             ])
-            rows = db.query((qpT))
+            rows = db.query((qpT), fetchAll=True)
             assert len(rows) == 1
             assert rows[0]['id'] == '111'
 
@@ -350,7 +350,7 @@ class TestDB(unittest.TestCase):
                 [pipes.like, {'expr': 'id', 'pattern': '%2%'}],
                 [pipes.order, {'exprs': ['id'], 'orders':['DESC']}],
             ])
-            rows = db.query((q,p, T))
+            rows = db.query((q,p, T), fetchAll=True)
             assert len(rows) == 3
             assert rows[2]['id'] == '123'
             assert rows[1]['id'] == '222'
@@ -364,7 +364,7 @@ class TestDB(unittest.TestCase):
                 [pipes.order, {'exprs': ['a', 'b', 'c'], 'orders':['DESC', 'DESC', 'DESC']}],
                 [pipes.limit, {'limit': 10}],
             ])
-            rows = db.query((q,p, T))
+            rows = db.query((q,p, T), fetchAll=True)
             assert len(rows) == 3
             assert rows[0]['id'] == '333'
             assert rows[1]['id'] == '321'
@@ -378,7 +378,7 @@ class TestDB(unittest.TestCase):
                 [pipes.limit, {'limit': 2, 'offset': 1}]
             ])
             #print(rows)
-            rows = db.query((q,p, T))
+            rows = db.query((q,p, T), fetchAll=True)
             
             #[id, a , b, c] => ('222', 2, 2, 2), ('321', 3, 2, 1), ('333', 3, 3, 3)
             assert len(rows) == 2
@@ -399,7 +399,7 @@ class TestDB(unittest.TestCase):
                 ],
                 [pipes.order, {'exprs': ['id'], 'orders':['DESC']}],
             ])
-            rows = db.query((q,p, T))
+            rows = db.query((q,p, T), fetchAll=True)
             assert len(rows) == 2
             assert rows[0]['id'] == '333'
             assert rows[1]['id'] == '222'
@@ -418,7 +418,7 @@ class TestDB(unittest.TestCase):
                 ],
                 [pipes.order, {'exprs': ['id'], 'orders':['DESC']}],
             ])
-            rows = db.query((q,p, T))
+            rows = db.query((q,p, T), fetchAll=True)
             assert len(rows) == 1
             assert rows[0]['id'] == '111'
 
@@ -432,7 +432,7 @@ class TestDB(unittest.TestCase):
                 ['order', {'exprs': ['a', 'b', 'c'], 'orders':['DESC', 'DESC', 'DESC']}],
                 [pipes.limit, {'limit': 2, 'offset': 2}]
             ])
-            rows = db.query((q,p,T))
+            rows = db.query((q,p,T), fetchAll=True)
             assert len(rows) == 1
             assert rows[0]['id'] == '123'
 
@@ -459,7 +459,7 @@ class TestDB(unittest.TestCase):
                 }, ['id'], quote=True
                 ), ['id']
             )
-            rows = db.query((q,p, T))
+            rows = db.query((q,p, T), fetchAll=True)
             #print(rows)
             assert len(rows) == 6
             assert rows[0]['id'] == '111'
@@ -480,7 +480,7 @@ class TestDB(unittest.TestCase):
                 }, quote=True
                 ), ['subid']
             )
-            rows = db.query((q,p,T))
+            rows = db.query((q,p,T), fetchAll=True)
             #print(rows)
             assert len(rows) == 5
             assert rows[0]['subid'] == '11'

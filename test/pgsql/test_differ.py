@@ -39,6 +39,7 @@ class TestDiffer(unittest.TestCase):
             #QueryFactory: columnsQuery
             flatTableColumnRows = queryRunner.run(queryFactory.columnsQuery(tableRE='b[.]user'))
             #print(flatTableColumnRows)
+            flatTableColumnRows = [r for r in flatTableColumnRows]
             self.assertEqual(len(flatTableColumnRows), 0)
 
             flatTableColumnRows = queryRunner.run(queryFactory.columnsQuery(tableRE='u[.]user'))
