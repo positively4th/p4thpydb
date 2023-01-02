@@ -164,15 +164,18 @@ class ORM:
 
         res = [None] * len(rows)
         for i, row in enumerate(rows):
-            valAssigns = ['{} = {}'.format(self.util.quote(col), self.ph) for col, spec in Tools.keyValIter(valSpecs, sort=True) if col in row]
-            keyWheres = ['{} = {}'.format(self.util.quote(col), self.ph) for col, spec in Tools.keyValIter(keySpecs, sort=True) if col in row]
-
-            p = [
-                spec.transform(row[key], inverse=False) for key, spec in Tools.keyValIter(valSpecs, sort=True) if key in row
-            ] + [
-                spec.transform(row[key], inverse=False) for key, spec in Tools.keyValIter(keySpecs, sort=True) if key in row
+            p = {}
+            valAssigns = [
+                '{} = {}'.format(self.util.quote(col), self.util.p(p, spec.transform(row[col], inverse=False)))
+                for col, spec in Tools.keyValIter(valSpecs, sort=True)
+                if col in row
             ]
-            
+            keyWheres = [
+                '{} = {}'.format(self.util.quote(col), self.util.p(p, spec.transform(row[col], inverse=False)))
+                for col, spec in Tools.keyValIter(keySpecs, sort=True)
+                if col in row
+            ]
+
             if len(valAssigns) > 0:
                 q = 'UPDATE {} SET {} WHERE {}'.format(self.util.quote(tableSpec['name']),
                                                   ','.join(valAssigns),

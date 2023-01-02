@@ -13,17 +13,30 @@ except NameError as e:
 from contrib.p4thpy.subprocesshelper import SubProcessHelper
 from contrib.p4thpy.subprocesshelper import SubProcessError
 
-modulusReplacePattern = [
-    r'(?:(?!(s[ );])))',
-    r'(?:(?![(][a-zA-Z][^0-9a-zA-Z]*[)]s[ );]))'
+parameterMatchers = [
+    r'([(][{}].*?)'.format(Util.pNamePrefix) # <-- safe form = (:...)s
 ]
-modulusReplacePattern = r'%(?!(?:{}))'.format('|'.join(modulusReplacePattern))
+parameterMatchers = [
+    '(?:{})'.format(p) for p in parameterMatchers
+]
+modulusReplacePattern = r'%(?!(?:{}))'.format('|'.join(parameterMatchers))
+#modulusReplacePattern = r'%(?!(?:{}))'.format(parameterMatchers[0])
 
 
 class DBError(DBError0):
     pass
 
 class DB(DB0):
+
+    @staticmethod
+    def protectMod(q):
+        qq = q
+        qqq = qq + ' '
+        while qq != qqq:
+            qqq = re.sub(modulusReplacePattern, '%%', qq)
+            return qqq
+            qq = qqq
+        return qq
 
     @classmethod
     def createPipes(cls):
@@ -72,13 +85,6 @@ class DB(DB0):
             self.db = None
 
     def _queryHelper(self, qpT, transformer=None, stripParams=False, fetch=True, debug=None):
-        def fixModOp(q):
-            qq = q
-            qqq = qq + ' '
-            while qq != qqq:
-                qqq = re.sub(modulusReplacePattern, '%%', qq)
-                qq = qqq
-            return qq
 
         def createFetchOne(_cursor):
 
@@ -103,7 +109,7 @@ class DB(DB0):
         try:
             util = self.createUtil()
             q, p, T = self.util.qpTSplit(qpT)
-            q = fixModOp(q)
+            q = DB.protectMod(q)
             p = util.pStrip(q, p) if stripParams else p
 
             self.log.debug('q,p,T: %s, %s, %s' % (q, p, T))
@@ -139,23 +145,23 @@ class DB(DB0):
 
     def tableExists(self, table, columnNames):
         schema, _table = self.util.schemaTableSplit(table);
+        p = {}
         q = """
         SELECT table_name 
         FROM information_schema.tables 
-        WHERE  table_name = %s AND (%s = 1 OR table_schema = %s)
+        WHERE  table_name = {} AND ({} = 1 OR table_schema = {})
         LIMIT 2
-        """.format()
-        p = [table, 0 if schema else 1, schema]
+        """.format(*self.util.ps(p, [table, 0 if schema else 1, schema]))
         rows = [r for r in self.query((q,p), debug=False)]
         if len(rows) != 1:
             return False
 
+        p = {}
         q = """
         SELECT *
         FROM information_schema.columns
-        WHERE  table_name = %s AND (%s = 1 OR table_schema = %s)
-        """
-        p = [table, 0 if schema else 1, schema]
+        WHERE  table_name = {} AND ({} = 1 OR table_schema = {})
+        """.format(*self.util.ps(p, [table, 0 if schema else 1, schema]))
         rows = self.query((q,p), debug=False)
         a = set([row['column_name'] for row in rows])
         b = set(columnNames)

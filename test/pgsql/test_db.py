@@ -250,21 +250,40 @@ class TestDB(unittest.TestCase):
 
             orm.dropTable(tableSpec)
 
+    def test_protectMod(self):
+
+        inpExpPairs = [
+            ['select 1 % 2', 'select 1 %% 2'],
+            ['select 1%2', 'select 1%%2'],
+            ['select a%b', 'select a%%b'],
+            ['select -1%b', 'select -1%%b'],
+            ['select a%-b', 'select a%%-b'],
+            ['select %(:x)s as b', 'select %(:x)s as b'],
+            ['select %(:x)s as b', 'select %(:x)s as b'],
+            ['WHERE "matchId" IN (%(:0_1_e49e0bb1)s))', 'WHERE "matchId" IN (%(:0_1_e49e0bb1)s))'],
+            ['IN (%(:0_7_ce43ac50_178d_4d6f_9d95_f13a17f40446)s)', 'IN (%(:0_7_ce43ac50_178d_4d6f_9d95_f13a17f40446)s)'],
+            ['IN (%(:0_13_ce43ac50_178d_4d6f_9d95_f13a17f40446)s,', 'IN (%(:0_13_ce43ac50_178d_4d6f_9d95_f13a17f40446)s,',]
+        ]
+        for inpExpPair in inpExpPairs:
+            act = DB.protectMod(inpExpPair[0])
+            self.assertEqual(inpExpPair[1], act, inpExpPair[0])
+
+
     def test_legacy(self):
 
 
         with testing.postgresql.Postgresql() as testpg:        
             db = DB(testpg.url())
             util = Util()
-            pipes = Pipes();
-            orm = ORM(db);
+            pipes = Pipes()
+            orm = ORM(db)
 
             db.query('CREATE TABLE strvec3 (id TEXT, a DOUBLE PRECISION, b DOUBLE PRECISION, c DOUBLE PRECISION, PRIMARY KEY (id))')
-            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('111', 1, 1, 1)");
-            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('123', 1, 2, 3)");
-            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('222', 2, 2, 2)");
-            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('321', 3, 2, 1)");
-            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('333', 3, 3, 3)");
+            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('111', 1, 1, 1)")
+            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('123', 1, 2, 3)")
+            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('222', 2, 2, 2)")
+            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('321', 3, 2, 1)")
+            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('333', 3, 3, 3)")
             tableSpec = {
                 'name': "strvec3",
                 'columnSpecs': {
@@ -441,16 +460,16 @@ class TestDB(unittest.TestCase):
         with testing.postgresql.Postgresql() as testpg:        
             db = DB(testpg.url())
             util = Util()
-            pipes = Pipes();
-            orm = ORM(db);
+            pipes = Pipes()
+            orm = ORM(db)
 
             db.query('CREATE TABLE strvec3 (id TEXT, a DOUBLE PRECISION, b DOUBLE PRECISION, c DOUBLE PRECISION, PRIMARY KEY (id))')
-            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('111', 1, 1, 1)");
-            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('113', 1, 1, 3)");
-            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('123', 1, 2, 3)");
-            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('222', 2, 2, 2)");
-            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('321', 3, 2, 1)");
-            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('333', 3, 3, 3)");
+            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('111', 1, 1, 1)")
+            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('113', 1, 1, 3)")
+            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('123', 1, 2, 3)")
+            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('222', 2, 2, 2)")
+            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('321', 3, 2, 1)")
+            db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('333', 3, 3, 3)")
             q = 'SELECT * FROM strvec3'
             p = []
             q,p,T = pipes.order(

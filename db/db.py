@@ -2,7 +2,7 @@ from uuid import uuid4
 import logging
 log0 = logging.getLogger(__name__)
 
-from ts import Ts
+from .ts import Ts
 
 class DBError(Exception):
     pass
