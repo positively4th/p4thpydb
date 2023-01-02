@@ -1,12 +1,10 @@
+import psycopg
+
 from ..db import DB as DB0
 from ..db import DBError as DBError0
 from .util import Util
 import re
 
-try:
-    import psycopg as psycopg3
-except NameError as e:
-    import psycopg
 
 from contrib.p4thpy.subprocesshelper import SubProcessHelper
 from contrib.p4thpy.subprocesshelper import SubProcessError
@@ -115,7 +113,7 @@ class DB(DB0):
             #    return []
             return createFetchOne(cursor)
 
-        except psycopg3.errors.InFailedSqlTransaction as e:
+        except psycopg.errors.InFailedSqlTransaction as e:
             self.log.error("query error: %s", e.diag.message_primary)
             # import sys
             # import traceback
