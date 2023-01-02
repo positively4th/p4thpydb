@@ -3,7 +3,7 @@ from ..ts import Ts
 from .util import Util
 
 
-import psycopg3
+import psycopg
 
 from contrib.p4thpy.subprocesshelper import SubProcessHelper
 from contrib.p4thpy.subprocesshelper import SubProcessError
@@ -19,7 +19,7 @@ class DB(DB0):
         self._url = self.createURL(**kwargs) if url is None else url
 
         self.log.debug('url %s' % self.url)
-        self.db = psycopg3.connect(self.url, autocommit=True)
+        self.db = psycopg.connect(self.url, autocommit=True)
         self._cursor = None
 
     @classmethod

@@ -1,6 +1,7 @@
 import unittest
 import testing.postgresql
 import tempfile
+import ramda as R
 from uuid import uuid4
 from os import path
 from contrib.p4thpy.tools import Tools
@@ -47,6 +48,12 @@ class TestDiffer(unittest.TestCase):
             flatTableColumnRows = queryRunner.run(queryFactory.columnsQuery(tableRE='^u[.].*$|^b[.].*$'))
             #print(flatTableColumnRows)
             self.assertEqual(len(flatTableColumnRows), 6)
+
+            sorter = R.sort_with([
+                R.ascend(R.prop('table')),
+                R.ascend(R.prop('column'))
+            ])
+            flatTableColumnRows = sorter(flatTableColumnRows)
             self.assertEqual(flatTableColumnRows[0], {'table': 'b.book', 'column': 'author', 'isPrimaryKey': 0})
             assert flatTableColumnRows[1] == {'table': 'b.book', 'column': 'id', 'isPrimaryKey': 1}
             assert flatTableColumnRows[2] == {'table': 'b.book', 'column': 'title', 'isPrimaryKey': 0}
@@ -141,6 +148,13 @@ class TestDiffer(unittest.TestCase):
 
             assert 'columns' in spec
             assert len(spec['columns']) == 6
+
+            sorter = R.sort_with([
+                R.ascend(R.prop('table')),
+                R.ascend(R.prop('column'))
+            ])
+            spec['columns'] = sorter(spec['columns'])
+
             self.assertEqual(spec['columns'][0], {'table': 'b.book', 'column': 'author', 'isPrimaryKey': 0})
             assert spec['columns'][1] == {'table': 'b.book', 'column': 'id', 'isPrimaryKey': 1}
             assert spec['columns'][2] == {'table': 'b.book', 'column': 'title', 'isPrimaryKey': 0}
