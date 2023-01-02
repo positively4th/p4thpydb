@@ -18,26 +18,32 @@ class QueryFactory(QueryFactory0):
         super().__init__(Util())
         self.pipes = Pipes()
   
-    def schemasQuery(self, p={}):
+    def schemasQuery(self, p={}, schemaRE=None):
 
         q = '''
         SELECT name AS schema, * 
         FROM  pragma_database_list
         '''
         qp = (q, p)
+        if schemaRE:
+            qp = self.pipes.matches(qp, {
+                'schema': schemaRE,
+            }, quote=True)
         return qp
         
-    def columnsQuery(self, p={}, tableRE=None, columnRE=None):
+    def columnsQuery(self, p={}, tableRE=None, columnRE=None, schema='main',
+                     columnMask=['table', 'column', 'isPrimaryKey']):
 
         q = '''
-        SELECT m.name as "table", p.name as "column", 
-          m.name || '.' || p.name as "tablecolumn",
+        SELECT '{schema}.' || m.name AS "table", 
+          p.name AS column, 
+          '{schema}.' || m.name || '.' || p.name AS _fqn,
           p.pk as "isPrimaryKey"
-        FROM main.sqlite_master AS m
-        JOIN main.pragma_table_info(m.name) AS p
+        FROM {schema}.sqlite_master AS m
+        JOIN {schema}.pragma_table_info(m.name) AS p
         WHERE m.name NOT IN ('sqlite_sequence')
         ORDER BY m.name, p.name
-        '''
+        '''.format(schema=schema)
         qp = (q, p)
         if tableRE:
             qp = self.pipes.matches(qp, {
@@ -45,9 +51,9 @@ class QueryFactory(QueryFactory0):
             }, quote=True)
         if columnRE:
             qp = self.pipes.matches(qp, {
-            'tablecolumn': columnRE,
+            '_fqn': columnRE,
             }, quote=True)
-        qp = self.pipes.columns(qp, ['table', 'column', 'isPrimaryKey'], quote=True)
+        qp = self.pipes.columns(qp, columnMask, quote=True)
         return qp
         
     def logQueries(self, table):
@@ -155,6 +161,21 @@ class Differ(Differ0):
 
     def __init__(self, db):
         super().__init__(Util(), QueryFactory(), QueryRunner(db))
+
+    def querySchemas(self, schemaRE=None):
+        schemasQuery = self.queryFactory.schemasQuery(schemaRE=schemaRE)
+        return self.queryRunner.run(schemasQuery)
+ 
+    def queryColumns(self, schemaRE=None, tableRE=None, columnRE=None):
+        schemas = self.querySchemas(schemaRE=schemaRE);
+        res = []
+        for schemaRow in schemas:
+            columnsQuery = self.queryFactory.columnsQuery(tableRE=tableRE, columnRE=columnRE,
+                                                          schema=schemaRow['schema'])
+            res = res + self.queryRunner.run(columnsQuery)
+
+        return res
+    
         
 if __name__ == '__main__':
 

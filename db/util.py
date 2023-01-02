@@ -8,11 +8,12 @@ class UtilError(Exception):
 
 class Util():
 
-    def __init__(self, prefix, suffix, quoteChar, placeholder):
+    def __init__(self, prefix, suffix, quoteChar, placeholder, pNamePrefix=''):
         self.prefix = prefix
         self.suffix = suffix
         self.quoteChar = quoteChar
         self.placeholder = placeholder
+        self.pNamePrefix = pNamePrefix
         self._pRe = None
 
     _idCtr = 0
@@ -66,9 +67,8 @@ class Util():
 
         return '.'.join(_expr)
 
-    
     def p(self, p, val, name='', prefix='', suffix=''):
-        name = Uniqify.next(prefix=name, suffix=self._pId, sep='_', caster=str)
+        name = str(self.pNamePrefix) + Uniqify.next(prefix=name, suffix=self._pId, sep='_', caster=str)
         p[name] = val
         return self.prefix + prefix + name + suffix + self.suffix
 

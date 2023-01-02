@@ -143,8 +143,7 @@ class QueryRunner:
         res = []
         for _,qp in Tools.keyValIter(_qps, stringAsSingular=True):
             _qp = (qp,) if Tools.isString(qp) else qp
-            #print(_qp)
-            res.append(self.db.query(_qp, *args, **kwargs))
+            res.append(self.db.query(_qp, *args, fetchAll=True, **kwargs))
         return res[0] if Tools.isTuple(qps) or Tools.isString(qps) else res
     
 class Differ:
@@ -162,15 +161,16 @@ class Differ:
     def queryRunner(self):
         return self._queryRunner
     
-    def queryColumns(self, tableRE=None, columnRE=None):
-        columnsQuery = self.queryFactory.columnsQuery(tableRE=tableRE, columnRE=columnRE)
+    def queryColumns(self, schemaRE=None, tableRE=None, columnRE=None):
+        columnsQuery = self.queryFactory.columnsQuery(schemaRE=schemaRE, tableRE=tableRE, columnRE=columnRE)
         return self.queryRunner.run(columnsQuery)
+
     def querySchemas(self):
         schemasQuery = self.queryFactory.schemasQuery()
         return self.queryRunner.run(schemasQuery)
  
-    def queryTables(self, tableRE=None, columnRE=None):
-        columns = self.queryColumns(tableRE=tableRE, columnRE=columnRE)
+    def queryTables(self, schemaRE=None, tableRE=None, columnRE=None):
+        columns = self.queryColumns(schemaRE=schemaRE, tableRE=tableRE, columnRE=columnRE)
         tables = Tools.pipe(columns, [
             [Tools.pluck, [lambda r, i: r['table']], {}],
             [Tools.unique, [], {}]

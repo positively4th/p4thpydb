@@ -41,10 +41,13 @@ class Pipes():
 
     def member(self, qpT, expr, values=None, op='IN', quote=True):
         q,p,T = self.util.qpTSplit(qpT)
+        vs = values
         #print('pipeValues', values)
-        if values == None:
+        if vs == None:
             return q, p
-        vs = [values] if isinstance(values, (float, int, str)) else list(values)
+        vs = [vs] if isinstance(vs, (float, int, str)) else list(vs)
+        if T and expr in T:
+            vs = [T[expr](v) for v in vs]
         pp = dict(p)
         q = 'SELECT * FROM ({}) AS _q WHERE {} {} ({})'.format(q, self.quote(expr, quote), op, self.util.ps(pp, vs, sep=','))
         return q, pp, T
@@ -61,9 +64,10 @@ class Pipes():
             )
             return q, p, T
 
+        Tm = {k: T(v) if T and k in T else v for k, v in map.items()}
 
         pp = dict(p)
-        wheres = ['{} {} {}'.format(self.quote(l, quote), op, self.util.p(pp, r, l)) for l, r in map.items()]
+        wheres = ['{} {} {}'.format(self.quote(l, quote), op, self.util.p(pp, r, l)) for l, r in Tm.items()]
         q = 'SELECT * FROM ({}) AS _q WHERE {}'.format(q, ' AND '.join(wheres))
         return q, pp, T
 
@@ -126,13 +130,13 @@ class Pipes():
         return q, p, T
 
 
-    def columns(self, qpT, columns=[], quote=False):
+    def columns(self, qpT, columns=[], quote=True):
         #Todo: Remove unused transforms
         q, p, T = self.util.qpTSplit(qpT)
         #print('pipeValues', values0)
         if len(columns) < 1:
             return q, p
-        q = 'SELECT {} FROM ({}) AS _q'.format(', '.join([self.quote(c, quote) for c in columns]) ,q)
+        q = 'SELECT {} FROM ({}) AS _q'.format(', '.join([self.quote(c, quote) for c in columns]), q)
         T = None if T is None else {name: T[name] for name in columns if name in T}  
         return q, p, T
 
