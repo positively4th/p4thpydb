@@ -3,14 +3,13 @@ import psycopg
 from ..db import DB as DB0
 from ..db import DBError as DBError0
 from .util import Util
+from .pipes import Pipes
 import re
 
-
 from contrib.p4thpy.subprocesshelper import SubProcessHelper
-from contrib.p4thpy.subprocesshelper import SubProcessError
 
 parameterMatchers = [
-    r'([(][{}].*?)'.format(Util.pNamePrefix) # <-- safe form = (:...)s
+    r'([(][{}].*?)'.format(Util.pNamePrefix)  # <-- safe form = (:...)s
 ]
 parameterMatchers = [
     '(?:{})'.format(p) for p in parameterMatchers
@@ -44,7 +43,6 @@ class DB(DB0):
         return _PGUtil()
 
     def __init__(self, url=None, log=None, **kwargs):
-        #print('\n', url, '\n')
         super().__init__(Util(), log=log);
 
         self._url = self.createURL(**kwargs) if url is None else url
@@ -55,19 +53,18 @@ class DB(DB0):
 
     @classmethod
     def createURL(cls, **kwargs):
-        res = ['postgres://']
-        res.append(kwargs['username'] if 'username' in kwargs else 'postgres')
+        res = ['postgres://', kwargs['username'] if 'username' in kwargs else 'postgres']
         if 'password' in kwargs:
             res.append(':' + kwargs['password'])
         res.append('@')
         res.append(kwargs['host'] if 'host' in kwargs else 'localhost')
         res.append(':')
         res.append(kwargs['port'] if 'post' in kwargs else '5432')
-        if 'db' in kwargs :
+        if 'db' in kwargs:
             res.append('/')
             res.append(kwargs['db'])
         return ''.join(res)
-    
+
     def __del__(self):
         self.log.debug('Closing db!')
         if hasattr(self, 'db'):
@@ -108,8 +105,8 @@ class DB(DB0):
             r = cursor.execute(q, p)
             description = cursor.description
 
-            #assert description is not None
-            #if (description is None):
+            # assert description is not None
+            # if (description is None):
             #    return []
             return createFetchOne(cursor)
 
@@ -142,7 +139,7 @@ class DB(DB0):
         WHERE  table_name = {} AND ({} = 1 OR table_schema = {})
         LIMIT 2
         """.format(*self.util.ps(p, [table, 0 if schema else 1, schema]))
-        rows = [r for r in self.query((q,p), debug=False)]
+        rows = [r for r in self.query((q, p), debug=False)]
         if len(rows) != 1:
             return False
 
@@ -152,14 +149,15 @@ class DB(DB0):
         FROM information_schema.columns
         WHERE  table_name = {} AND ({} = 1 OR table_schema = {})
         """.format(*self.util.ps(p, [table, 0 if schema else 1, schema]))
-        rows = self.query((q,p), debug=False)
+        rows = self.query((q, p), debug=False)
         a = set([row['column_name'] for row in rows])
         b = set(columnNames)
         return a.issubset(b) and b.issubset(a)
-    
+
     def exportToFile(self, path, invert=False, explain=False, schemas=None, restoreTables=None):
 
         errs = []
+
         def explainSink(out, err):
             nonlocal errs
 
@@ -189,7 +187,7 @@ class DB(DB0):
                 '--data-only' if not restoreTables is None else None,
                 '--clean' if restoreTables is None else None,
                 '--if-exists' if restoreTables is None else None,
-                #'--format=' + format,
+                # '--format=' + format,
                 '--single-transaction',
                 '--strict-names',
                 '--verbose',
@@ -214,10 +212,9 @@ class DB(DB0):
 
         if not schemas is None:
             if len(schemas) < 1:
-                    raise DBError('Nothing to restore. No schenas given.')
+                raise DBError('Nothing to restore. No schenas given.')
             for schema in schemas:
                 args.append('--schema={}'.format(schema))
-                
 
         args = [arg for arg in args if not arg is None]
         self.log.info(str(args))
@@ -237,26 +234,131 @@ class DB(DB0):
                 self.log.error(err)
 
         return returnCode
-    
+
     def startTransaction(self):
         if len(self.savepoints) == 0:
             self.query('BEGIN'.format(id), debug=None);
 
         return super().startTransaction()
-        
+
     def rollback(self):
         res = super().rollback()
         if len(self.savepoints) == 0:
             self.query('ROLLBACK'.format(id), debug=None);
         return res
-        
+
     def commit(self):
         res = super().commit()
         if len(self.savepoints) == 0:
             self.query('COMMIT'.format(id), debug=None);
         return res
 
-        
+    @classmethod
+    def schemaQuery(cls, p={}, schemaRE=None):
+        q = '''
+        SELECT schema_name AS schema
+        FROM information_schema.schemata AS _s
+        WHERE _s.schema_name NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
+        '''
+        qp = (q, p)
+        pipes = Pipes()
+        if schemaRE is not None:
+            qp = pipes.matches(qp, {
+                'schema': schemaRE,
+            }, quote=True)
+
+        return qp
+
+    @classmethod
+    def indexQuery(cls, p={}, schemaRE=None, tableRE=None, indexRE=None, pathRE=None, definitionRE=None):
+
+        q = '''
+        SELECT _ix.schemaname AS "schema"
+         , _ix.tablename AS "table" 
+	     , _ix.indexname AS "index" 
+	     , _ix.schemaname || '.' || _ix.tablename || '.' || _ix.indexname AS "path" 
+	     , _ix.indexdef AS "definition" 
+        FROM pg_indexes _ix
+        WHERE _ix.schemaname NOT IN ('pg_catalog')
+        '''
+
+        qp = (q, p)
+        pipes = Pipes()
+        if not schemaRE is None:
+            qp = pipes.matches(qp, {
+                'schema': schemaRE,
+            }, quote=True)
+
+        if not tableRE is None:
+            qp = pipes.matches(qp, {
+                'table': tableRE,
+            }, quote=True)
+
+        if not indexRE is None:
+            qp = pipes.matches(qp, {
+                'index': indexRE,
+            }, quote=True)
+
+        if not pathRE is None:
+            qp = pipes.matches(qp, {
+                'path': pathRE,
+            }, quote=True)
+
+        if definitionRE is not None:
+            qp = pipes.matches(qp, {
+                'definition': definitionRE,
+            }, quote=True)
+
+        return qp
+
+    @classmethod
+    def columnQuery(cls, p={}, schemaRE=None, tableRE=None, columnRE=None, pathRE=None):
+        q = '''
+        SELECT tc.table_schema AS schema
+          , c.table_name AS table
+          , c.column_name AS column
+          , tc.table_schema || '.' || c.table_name || '.' || c.column_name as path
+          , ccu.column_name IS NOT NULL AS primary_key
+        FROM information_schema.columns AS c
+        LEFT JOIN information_schema.table_constraints tc ON (
+          c.table_schema = tc.constraint_schema
+          AND 
+          tc.table_name = c.table_name AND constraint_type = 'PRIMARY KEY'
+        )
+        LEFT JOIN information_schema.constraint_column_usage AS ccu ON (
+          ccu.constraint_schema = tc.constraint_schema
+          AND
+          ccu.constraint_name = tc.constraint_name
+         AND 
+          ccu.column_name = c.column_name
+        ) 
+        where c.table_schema not in ('pg_catalog', 'information_schema')
+        '''
+
+        qp = (q, p)
+        pipes = Pipes()
+        if not schemaRE is None:
+            qp = pipes.matches(qp, {
+                'schema': schemaRE,
+            }, quote=True)
+
+        if not tableRE is None:
+            qp = pipes.matches(qp, {
+                'table': tableRE,
+            }, quote=True)
+
+        if not columnRE is None:
+            qp = pipes.matches(qp, {
+                'column': columnRE,
+            }, quote=True)
+
+        if not pathRE is None:
+            qp = pipes.matches(qp, {
+                'path': pathRE,
+            }, quote=True)
+
+        return qp
+
     @property
     def cursor(self):
         return self.db.cursor()
@@ -264,8 +366,7 @@ class DB(DB0):
     @property
     def connection(self):
         return self.db
-        
+
     @property
     def url(self):
         return self._url
-        

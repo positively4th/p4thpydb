@@ -1,5 +1,6 @@
 from uuid import uuid4
 import logging
+import ramda as R
 log0 = logging.getLogger(__name__)
 
 from .ts import Ts
@@ -52,6 +53,35 @@ class DB:
         id = self.savepoints.pop()
         self.query(('RELEASE "{}"'.format(id)), debug=None);
 
+    def queryColumns(self, *args, schemaRE=None, tableRE=None, columnRE=None,
+                     pathRE=None, **kwargs):
+        columnsQuery = self.columnQuery(schemaRE=schemaRE, tableRE=tableRE, columnRE=columnRE,
+                                        pathRE=pathRE)
+        return self.query(columnsQuery, *args, **kwargs)
+
+    def querySchemas(self, *args, **kwargs):
+        schemaQuery = self.schemaQuery()
+        return self.query(schemaQuery, *args, **kwargs)
+
+    def queryTables(self, *args, schemaRE=None, tableRE=None, pathRE=None, **kwargs):
+        columns = self.queryColumns(*args, schemaRE=schemaRE, tableRE=tableRE, pathRE=pathRE, **kwargs)
+        tables = R.pipe(
+            R.map(lambda d: {
+                'schema': d['schema'],
+                'table': d['table'],
+                'path': '{}.{}'.format(d['schema'], d['table'])
+            }),
+            R.uniq
+        )(columns)
+
+        return tables
+
+    def queryIndexes(self, *args, schemaRE=None, tableRE=None, indexRE=None,
+                     pathRE=None, definitionRE=None, **kwargs):
+        indexQuery = self.indexQuery(schemaRE=schemaRE, tableRE=tableRE, indexRE=indexRE,
+                                     pathRE=pathRE, definitionRE=definitionRE)
+        return self.query(indexQuery, *args, **kwargs)
+
     def _queryHelper(self, qpT, transformer=None, stripParams=False, debug=None):
         raise DBError('Not implemented.')
 
@@ -66,6 +96,7 @@ class DB:
             return [r for r in gen]
 
         return gen
+
 
     @staticmethod
     def generateRow(fetchOne, T):

@@ -1,9 +1,11 @@
+import ramda as R
 from os import path
 from os.path import abspath
 from ..db import DB as DB0
 from ..db import DBError as DBError0
 from ..ts import Ts
 from .util import Util
+from .pipes import Pipes
 
 import apsw
 #print ("      Using APSW file",apsw.__file__)                # from the extension module
@@ -64,8 +66,6 @@ class DB(DB0):
     @staticmethod
     def __rowFactory__(cursor, row):
         columns = [t[0] for t in cursor.getdescription()]
-        #print('cols', columns)
-        #print('row', row)
         return dict(zip(columns, row))
 
     def __del__(self):
@@ -73,6 +73,126 @@ class DB(DB0):
         #if hasattr(self, 'db'):
         #    self.db.close()
         pass
+
+    def queryColumns(self, *args, schemaRE=None, tableRE=None, columnRE=None,
+                     pathRE=None, **kwargs):
+        schemas = R.map(lambda r: r['schema'])(self.querySchemas())
+        columnsQuery = self.columnQuery(schemas=schemas, schemaRE=schemaRE, tableRE=tableRE, columnRE=columnRE,
+                                        pathRE=pathRE)
+        return self.query(columnsQuery, *args, **kwargs)
+
+    def queryIndexes(self, *args, schemaRE=None, tableRE=None, indexRE=None,
+                     pathRE=None, definitionRE=None, **kwargs):
+        schemas = R.map(lambda r: r['schema'])(self.querySchemas())
+        indexQuery = self.indexQuery(schemas=schemas, schemaRE=schemaRE, tableRE=tableRE, indexRE=indexRE,
+                                     pathRE=pathRE, definitionRE=definitionRE)
+        return self.query(indexQuery, *args, **kwargs)
+
+    @classmethod
+    def schemaQuery(cls, p={}, schemaRE=None):
+
+        q = '''
+        SELECT name AS schema 
+        FROM  pragma_database_list
+        '''
+        qp = (q, p)
+        pipes = Pipes()
+        if schemaRE:
+            qp = pipes.matches(qp, {
+                'schema': schemaRE,
+            }, quote=True)
+        return qp
+
+    @classmethod
+    def indexQuery(cls, p={}, schemas=['main'], schemaRE=None, tableRE=None, indexRE=None, pathRE=None,
+                       definitionRE=None):
+
+        q = []
+        for schema in schemas:
+            q.append('''
+                SELECT '{schema}' AS "schema", *
+                , _ix.tbl_name AS "table" 
+    	        , _ix.name AS "index" 
+    	        , '{schema}' || '.' || _ix.tbl_name || '.' || _ix.name AS "path" 
+    	        , _ix.sql AS "definition" 
+                FROM "{schema}".sqlite_master _ix
+                WHERE _ix."type" = 'index'
+            '''.format(schema=schema))
+
+        q = '\n\nUNION\n\n'.join(q)
+
+        qp = (q, p)
+        pipes = Pipes()
+        if not schemaRE is None:
+            qp = pipes.matches(qp, {
+                'schema': schemaRE,
+            }, quote=True)
+
+        if not tableRE is None:
+            qp = pipes.matches(qp, {
+                'table': tableRE,
+            }, quote=True)
+
+        if not indexRE is None:
+            qp = pipes.matches(qp, {
+                'index': indexRE,
+            }, quote=True)
+
+        if not pathRE is None:
+            qp = pipes.matches(qp, {
+                'path': pathRE,
+            }, quote=True)
+
+        if definitionRE is not None:
+            qp = pipes.matches(qp, {
+                'definition': definitionRE,
+            }, quote=True)
+
+        return qp
+
+    @classmethod
+    def columnQuery(cls, p={}, schemas=['main'], schemaRE=None, tableRE=None, columnRE=None,
+                    pathRE=None):
+
+        q = []
+        for schema in schemas:
+            q.append('''
+            SELECT '{schema}' AS "schema"
+              , m.name AS "table" 
+              , p.name AS "column", 
+              '{schema}.' || m.name || '.' || p.name AS "path",
+                p.pk AS "primary_key"
+            FROM {schema}.sqlite_master AS m
+            JOIN {schema}.pragma_table_info(m.name) AS p
+            WHERE m.name NOT IN ('sqlite_sequence')
+            '''.format(schema=schema))
+
+        q = '\n\nUNION\n\n'.join(q)
+
+        qp = (q, p)
+        pipes = Pipes()
+
+        if schemaRE:
+            qp = pipes.matches(qp, {
+                'schema': schemaRE,
+            }, quote=True)
+
+        if tableRE:
+            qp = pipes.matches(qp, {
+                'table': tableRE,
+            }, quote=True)
+
+        if columnRE:
+            qp = pipes.matches(qp, {
+                'column': columnRE,
+            }, quote=True)
+
+        if pathRE:
+            qp = pipes.matches(qp, {
+                'path': pathRE,
+            }, quote=True)
+
+        return qp
 
     def _queryHelper(self, qpT, transformer=None, stripParams=False, debug=None):
 

@@ -1,17 +1,16 @@
 import unittest
+from collections import OrderedDict
+
+from db.sqlite.db import DB
+from db.sqlite.util import Util
+from db.ts import Ts
+from db.sqlite.orm import ORM
+from db.sqlite.pipes import Pipes
+
 
 class TestDBSQLite(unittest.TestCase):
 
     def test_legacy(self):
-
-        import tempfile
-        from collections import OrderedDict
-
-        from db.sqlite.db import DB
-        from db.sqlite.util import Util
-        from db.ts import Ts
-        from db.sqlite.orm import ORM
-        from db.sqlite.pipes import Pipes
 
         #Util
 
@@ -412,6 +411,82 @@ class TestDBSQLite(unittest.TestCase):
 
         #print('dbFile={}'.format(dbFile))
         
+    def test_schema_queries(self):
+        dbFile = ':memory:'
+        uFile = ':memory:'
+        bFile = ':memory:'
+        cFile = ':memory:'
+        #tmpSchemaFile = '/tmp/testattached {}.db'.format(str(uuid4))
+        db = DB(dbFile, attaches={
+            'u': uFile,
+            'b': bFile,
+            'p': cFile,
+        }, extensions=[
+            './sqlite/sqlite3-pcre/pcre'
+        ])
+
+
+        db.query('CREATE TABLE "u"."user" (id SERIAL PRIMARY KEY, name TEXT, age INTEGER)')
+        db.query('INSERT INTO "u"."user" (name, age) VALUES (\'author1\', 31)')
+        db.query('INSERT INTO "u"."user" (name, age) VALUES (\'author2\', 32)')
+        db.query('INSERT INTO "u"."user" (name, age) VALUES (\'author3\', 33)')
+        db.query('CREATE INDEX "u"."name" on "user" (name)')
+        db.query('CREATE INDEX "u"."age" on "user" (age)')
+
+        db.query('CREATE TABLE "b".book (id SERIAL PRIMARY KEY, title TEXT, author TEXT)')
+        db.query('INSERT INTO "b".book (title, author) VALUES (\'book1\', \'author1\')')
+        db.query('INSERT INTO "b".book (title, author) VALUES (\'book2\', \'author2\')')
+        db.query('INSERT INTO "b".book (title, author) VALUES (\'book3\', \'author3\')')
+        db.query('CREATE TABLE "p"."player" (id SERIAL PRIMARY KEY, name TEXT, position TEXT)')
+        db.query('INSERT INTO "p".player (name, position) VALUES (\'player1\', \'lw\')')
+
+        #schema
+        rows = db.querySchemas(fetchAll=True)
+        self.assertEqual(4, len(rows))
+        self.assertIn({'schema': 'u'}, rows)
+        self.assertIn({'schema': 'b'}, rows)
+        self.assertIn({'schema': 'p'}, rows)
+        self.assertIn({'schema': 'main'}, rows)
+
+        #table
+        rows = db.queryTables(pathRE='p[.]player|u[.]user', fetchAll=True)
+        self.assertEqual(2, len(rows))
+        self.assertIn({'schema': 'u', 'table': 'user', 'path': 'u.user'}, rows)
+        self.assertIn({'schema': 'p', 'table': 'player', 'path': 'p.player'}, rows)
+
+        #column
+        rows = db.queryColumns(tableRE='b[.]user', fetchAll=True)
+        self.assertEqual(len(rows), 0)
+
+        rows = db.queryColumns(pathRE='u[.]user', fetchAll=True)
+        self.assertEqual(len(rows), 3)
+
+        rows = db.queryColumns(pathRE='^u[.].*$|^b[.].*$', fetchAll=True)
+        self.assertEqual(len(rows), 6)
+        assert {'path': 'b.book.author', 'schema': 'b', 'table': 'book', 'column': 'author',
+                'primary_key': False} in rows
+        assert {'path': 'b.book.id', 'schema': 'b', 'table': 'book', 'column': 'id',
+                'primary_key': True} in rows
+        assert {'path': 'b.book.title', 'schema': 'b', 'table': 'book', 'column': 'title',
+                'primary_key': False} in rows
+        assert {'path': 'u.user.age', 'schema': 'u', 'table': 'user', 'column': 'age',
+                'primary_key': False} in rows
+        assert {'path': 'u.user.id', 'schema': 'u', 'table': 'user', 'column': 'id',
+                'primary_key': True} in rows
+        assert {'path': 'u.user.name', 'schema': 'u', 'table': 'user', 'column': 'name',
+                'primary_key': False} in rows
+
+        #index
+        rows = db.queryIndexes(pathRE='^u[.]user[.]age$', fetchAll=True)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual({**rows[0], **{'path': 'u.user.age', 'schema': 'u', 'table': 'user', 'index': 'age',}
+                          }, rows[0])
+
+        rows = db.queryIndexes(schemaRE='^u$', tableRE='^user$', indexRE='^name', fetchAll=True)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual({**rows[0], **{'path': 'u.user.name', 'schema': 'u', 'table': 'user', 'index': 'name',}
+                          }, rows[0])
+
 
 if __name__ == '__main__':
 
