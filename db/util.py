@@ -19,6 +19,13 @@ class Util():
     _idCtr = 0
     _pId = str(uuid4()).replace('-','_')
 
+    @classmethod
+    def parseIndexName(cls, fqn):
+        return fqn
+
+    @classmethod
+    def parseIndexTableName(cls, fqn):
+        return fqn
 
     @classmethod
     def idCtr(cls):
