@@ -477,14 +477,26 @@ class TestDBSQLite(unittest.TestCase):
                 'primary_key': False} in rows
 
         #index
+        rows = db.queryIndexes(fetchAll=True)
+        self.assertEqual(len(rows), 3 + 2)
+
+        rows = db.queryIndexes(pathRE='^u[.]user[.]sqlite_autoindex_user_1$', fetchAll=True)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(
+            {**rows[0], **{'path': 'u.user.sqlite_autoindex_user_1', 'schema': 'u', 'table': 'user',
+                           'index': 'sqlite_autoindex_user_1', 'primary_key': True}
+             }, rows[0])
+
         rows = db.queryIndexes(pathRE='^u[.]user[.]age$', fetchAll=True)
         self.assertEqual(len(rows), 1)
-        self.assertEqual({**rows[0], **{'path': 'u.user.age', 'schema': 'u', 'table': 'user', 'index': 'age',}
+        self.assertEqual({**rows[0], **{'path': 'u.user.age', 'schema': 'u', 'table': 'user',
+                                        'index': 'age', 'primary_key': False}
                           }, rows[0])
 
         rows = db.queryIndexes(schemaRE='^u$', tableRE='^user$', indexRE='^name', fetchAll=True)
         self.assertEqual(len(rows), 1)
-        self.assertEqual({**rows[0], **{'path': 'u.user.name', 'schema': 'u', 'table': 'user', 'index': 'name',}
+        self.assertEqual({**rows[0], **{'path': 'u.user.name', 'schema': 'u', 'table': 'user',
+                                        'index': 'name', 'primary_key': False}
                           }, rows[0])
 
 

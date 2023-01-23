@@ -114,7 +114,8 @@ class DB(DB0):
                 , _ix.tbl_name AS "table" 
     	        , _ix.name AS "index" 
     	        , '{schema}' || '.' || _ix.tbl_name || '.' || _ix.name AS "path" 
-    	        , _ix.sql AS "definition" 
+    	        , _ix.sql AS "definition"
+    	        , _ix.sql IS NULL AS primary_key 
                 FROM "{schema}".sqlite_master _ix
                 WHERE _ix."type" = 'index'
             '''.format(schema=schema))

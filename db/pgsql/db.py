@@ -273,14 +273,18 @@ class DB(DB0):
     def indexQuery(cls, p={}, schemaRE=None, tableRE=None, indexRE=None, pathRE=None, definitionRE=None):
 
         q = '''
-        SELECT _ix.schemaname AS "schema"
-         , _ix.tablename AS "table" 
-	     , _ix.indexname AS "index" 
-	     , _ix.schemaname || '.' || _ix.tablename || '.' || _ix.indexname AS "path" 
-	     , _ix.indexdef AS "definition" 
-        FROM pg_indexes _ix
-        WHERE _ix.schemaname NOT IN ('pg_catalog')
+        SELECT _ixs.schemaname AS "schema"
+         , _ixs.tablename AS "table" 
+	     , _ixs.indexname AS "index" 
+	     , _ixs.schemaname || '.' || _ixs.tablename || '.' || _ixs.indexname AS "path" 
+	     , _ixs.indexdef AS "definition"
+	     , _ix.indisprimary AS "primary_key"
+        FROM pg_indexes _ixs
+        INNER JOIN pg_class _cl ON _cl.relname = _ixs.indexname
+        INNER JOIN pg_index _ix ON _ix.indexrelid = _cl.oid
+        WHERE _ixs.schemaname NOT IN ('pg_catalog')
         '''
+
 
         qp = (q, p)
         pipes = Pipes()
