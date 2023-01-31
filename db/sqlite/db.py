@@ -74,6 +74,11 @@ class DB(DB0):
         #    self.db.close()
         pass
 
+    def queryTables(self, *args, schemaRE=None, tableRE=None, pathRE=None, **kwargs):
+        schemas = R.map(lambda r: r['schema'])(self.querySchemas())
+        tableQuery = self.tableQuery(schemas=schemas, schemaRE=schemaRE, tableRE=tableRE, pathRE=pathRE)
+        return self.query(tableQuery, *args, **kwargs)
+
     def queryColumns(self, *args, schemaRE=None, tableRE=None, columnRE=None,
                      pathRE=None, **kwargs):
         schemas = R.map(lambda r: r['schema'])(self.querySchemas())
@@ -147,6 +152,41 @@ class DB(DB0):
         if definitionRE is not None:
             qp = pipes.matches(qp, {
                 'definition': definitionRE,
+            }, quote=True)
+
+        return qp
+
+    @classmethod
+    def tableQuery(cls, p={}, schemas=['main'], schemaRE=None, tableRE=None, pathRE=None):
+
+        q = []
+        for schema in schemas:
+            q.append('''
+            SELECT '{schema}' AS "schema"
+              , m.name AS "table", 
+              '{schema}.' || m.name AS "path"
+            FROM {schema}.sqlite_master AS m
+            WHERE m.name NOT IN ('sqlite_sequence')
+            '''.format(schema=schema))
+
+        q = '\n\nUNION\n\n'.join(q)
+
+        qp = (q, p)
+        pipes = Pipes()
+
+        if schemaRE:
+            qp = pipes.matches(qp, {
+                'schema': schemaRE,
+            }, quote=True)
+
+        if tableRE:
+            qp = pipes.matches(qp, {
+                'table': tableRE,
+            }, quote=True)
+
+        if pathRE:
+            qp = pipes.matches(qp, {
+                'path': pathRE,
             }, quote=True)
 
         return qp

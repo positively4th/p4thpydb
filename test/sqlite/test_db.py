@@ -422,7 +422,7 @@ class TestDBSQLite(unittest.TestCase):
             'b': bFile,
             'p': cFile,
         }, extensions=[
-            './sqlite/sqlite3-pcre/pcre'
+            '../contrib/sqlite3-pcre/pcre'
         ])
 
 

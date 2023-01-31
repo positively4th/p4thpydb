@@ -363,6 +363,35 @@ class DB(DB0):
 
         return qp
 
+    @classmethod
+    def tableQuery(cls, p={}, schemaRE=None, tableRE=None, pathRE=None):
+        q = '''
+        SELECT schemaname AS schema
+          , tablename AS table
+          , schemaname || '.' || tablename as path
+        FROM pg_catalog.pg_tables
+        where schemaname not in ('pg_catalog', 'information_schema')
+        '''
+
+        qp = (q, p)
+        pipes = Pipes()
+        if not schemaRE is None:
+            qp = pipes.matches(qp, {
+                'schema': schemaRE,
+            }, quote=True)
+
+        if not tableRE is None:
+            qp = pipes.matches(qp, {
+                'table': tableRE,
+            }, quote=True)
+
+        if not pathRE is None:
+            qp = pipes.matches(qp, {
+                'path': pathRE,
+            }, quote=True)
+
+        return qp
+
     @property
     def cursor(self):
         return self.db.cursor()

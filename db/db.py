@@ -1,6 +1,6 @@
+import re
 from uuid import uuid4
 import logging
-import ramda as R
 log0 = logging.getLogger(__name__)
 
 from .ts import Ts
@@ -9,6 +9,11 @@ class DBError(Exception):
     pass
 
 class DB:
+
+    @staticmethod
+    def escapeRE(text):
+        res = re.escape(text)
+        return res
 
     @classmethod
     def createPipes(cls):
@@ -64,17 +69,8 @@ class DB:
         return self.query(schemaQuery, *args, **kwargs)
 
     def queryTables(self, *args, schemaRE=None, tableRE=None, pathRE=None, **kwargs):
-        columns = self.queryColumns(*args, schemaRE=schemaRE, tableRE=tableRE, pathRE=pathRE, **kwargs)
-        tables = R.pipe(
-            R.map(lambda d: {
-                'schema': d['schema'],
-                'table': d['table'],
-                'path': '{}.{}'.format(d['schema'], d['table'])
-            }),
-            R.uniq
-        )(columns)
-
-        return tables
+        tablesQuery = self.tableQuery(schemaRE=schemaRE, tableRE=tableRE, pathRE=pathRE)
+        return self.query(tablesQuery, *args, **kwargs)
 
     def queryIndexes(self, *args, schemaRE=None, tableRE=None, indexRE=None,
                      pathRE=None, definitionRE=None, **kwargs):
@@ -88,7 +84,6 @@ class DB:
     def query(self, qpT, transformer=None, stripParams=False, fetchAll=False, debug=None):
         q,p,T = self.util.qpTSplit(qpT)
         T = transformer if transformer is not None else Ts.transformerFactory(T, inverse=True)
-
         fetchOne = self._queryHelper((q,p), transformer, stripParams, debug)
 
         gen = self.generateRow(fetchOne, T)

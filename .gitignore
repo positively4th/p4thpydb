@@ -1,6 +1,10 @@
-contrib
+contrib/**/*
+!contrib/install.sh
+
 **/*~
 **/__pycache__
 bin
 lib
 lib64
+
+.idea/**/*

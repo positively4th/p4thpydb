@@ -21,7 +21,6 @@ class Ts:
 
         return _
 
-
     def str(val, inverse=False):
         return None if val is None else str(val)
 
