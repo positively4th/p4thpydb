@@ -8,6 +8,8 @@ class UtilError(Exception):
 
 class Util():
 
+    quoteRe = re.compile(r'[:][|](.*?)[|][:]')
+
     def __init__(self, prefix, suffix, quoteChar, placeholder, pNamePrefix=''):
         self.prefix = prefix
         self.suffix = suffix
@@ -57,22 +59,32 @@ class Util():
         return q, p, T
 
     def quote(self, expr, quote=True, table=None):
+
+        def quotePath(path):
+            path = path.split('.')
+            path = ['{prefix}{qc}{e}{qc}'.format(prefix=prefix, e=e, qc=self.quoteChar) for e in path]
+            return '.'.join(path)
+
+
         prefix = '' if table is None else self.quote(table, quote) + '.'
         if not isinstance(expr, str):
             try:
-                if not quote:
+                if quote is False:
                     return [prefix + e for e in expr]
-                return [self.quote(e, True, table) for e in expr]
+                return [self.quote(e, quote=quote, table=table) for e in expr]
             except Exception as e:
                 print(e)
                 pass
 
-        if not quote:
+        if quote is False:
             return prefix + expr
-        _expr = expr.split('.')
-        _expr = ['{prefix}{qc}{e}{qc}'.format(prefix=prefix, e=e, qc=self.quoteChar) for e in _expr]
+        elif quote is True:
+            return quotePath(expr)
 
-        return '.'.join(_expr)
+        def replace(match):
+            return quotePath(match.group(1))
+
+        return self.quoteRe.sub(replace, expr)
 
     def p(self, p, val, name='', prefix='', suffix=''):
         name = str(self.pNamePrefix) + Uniqify.next(prefix=name, suffix=self._pId, sep='_', caster=str)
