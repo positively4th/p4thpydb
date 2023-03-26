@@ -34,7 +34,8 @@ class DB(DB0):
         return _SQLiteUtil()
     
     def __init__(self, *args, fileName=':memory:', extensions=[],
-                 pragmas=[], attaches={}, log=None):
+                 pragmas=[], attaches={}, log=None,
+                 busyRetries=None, busyTimeout=None):
 
         util = Util();
         super().__init__(util, log=log);
@@ -42,7 +43,12 @@ class DB(DB0):
         self.log.info('filename: %s' % fileName)
         self._filePath = fileName
         self.db = apsw.Connection(fileName, statementcachesize=20)
-        self.db.setbusytimeout(15*1000)
+        if busyTimeout is not None:
+            self.db.setbusytimeout(busyTimeout)
+        if busyRetries is not None:
+            self.db.setbusyhandler(lambda retries: retries <= busyRetries)
+        self.db.setbusyhandler(lambda retries: True)
+
         if len(extensions) > 0:
             self.db.enableloadextension(True)
             self.log.info('Loading extensions is enabled!')
@@ -50,6 +56,7 @@ class DB(DB0):
                 print(extension)
                 self.db.loadextension(path.abspath(extension))
 
+        #self.db.execute("pragma journal_mode=WAL")
         self.db.setrowtrace(DB.__rowFactory__)
         self._cursor = None
 

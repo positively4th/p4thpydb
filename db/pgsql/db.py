@@ -76,7 +76,7 @@ class DB(DB0):
         def createFetchOne(_cursor):
 
             def fetchEmpty():
-                pass
+                _cursor.close()
 
             if not _cursor.description:
                 return fetchEmpty
@@ -101,9 +101,9 @@ class DB(DB0):
 
             self.log.debug('q,p,T: %s, %s, %s' % (q, p, T))
 
-            cursor = self.cursor;
-            r = cursor.execute(q, p)
-            description = cursor.description
+            cursor = self.cursor
+            cursor.execute(q, p)
+            # description = cursor.description
 
             # assert description is not None
             # if (description is None):
