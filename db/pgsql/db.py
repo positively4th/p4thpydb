@@ -1,9 +1,13 @@
+from json import dumps
 import psycopg
+import subprocess
+from xxhash import xxh32
 
 from ..db import DB as DB0
 from ..db import DBError as DBError0
 from .util import Util
 from .pipes import Pipes
+from ..ts import Ts
 import re
 
 from contrib.p4thpy.subprocesshelper import SubProcessHelper
@@ -42,18 +46,43 @@ class DB(DB0):
         from .util import Util as _PGUtil
         return _PGUtil()
 
-    def __init__(self, url=None, log=None, **kwargs):
-        super().__init__(Util(), log=log);
+    async def async_db(self):
+        if self._async_db is None:
+            self._async_db = await psycopg.AsyncConnection.connect(self.url, autocommit=True, row_factory=psycopg.rows.dict_row)
+        return self._async_db
+
+    async def async_query(self, qpT, debug=None):
+        q, p, T = self.util.qpTSplit(qpT)
+        q = DB.protectMod(q)
+        T = Ts.transformerFactory(T, inverse=True)
+
+        db = await self.async_db()
+        async with db.cursor() as cursor:
+            await cursor.execute(q, p)
+            if cursor.rownumber is not None:
+                rows = await cursor.fetchall()
+            else:
+                return None
+
+        return [T(row) for row in rows]
+
+    def __init__(self, url=None, log=None, aSync=False, **kwargs):
+        super().__init__(Util(), log=log)
 
         self._url = self.createURL(**kwargs) if url is None else url
 
         self.log.debug('url %s' % self.url)
-        self.db = psycopg.connect(self.url, autocommit=True)
+        self.db = self.connect()
         self._cursor = None
+        self._async_db = None
+
+    def connect(self):
+        return psycopg.connect(self.url, autocommit=True)
 
     @classmethod
     def createURL(cls, **kwargs):
-        res = ['postgres://', kwargs['username'] if 'username' in kwargs else 'postgres']
+        res = ['postgres://', kwargs['username']
+               if 'username' in kwargs else 'postgres']
         if 'password' in kwargs:
             res.append(':' + kwargs['password'])
         res.append('@')
@@ -70,6 +99,9 @@ class DB(DB0):
         if hasattr(self, 'db'):
             self.db.close()
             self.db = None
+        if self._async_db is not None:
+            self._async_db.close()
+            self._async_db = None
 
     def _queryHelper(self, qpT, transformer=None, stripParams=False, fetch=True, debug=None):
 
@@ -121,7 +153,8 @@ class DB(DB0):
             print('')
             print('')
             self.log.error("Unknown error: %s", str(e))
-            for x in qpT: print(x)
+            for x in qpT:
+                print(x)
             import sys
             import traceback
             traceback.print_stack()
@@ -131,7 +164,7 @@ class DB(DB0):
             raise e
 
     def tableExists(self, table, columnNames):
-        schema, _table = self.util.schemaTableSplit(table);
+        schema, _table = self.util.schemaTableSplit(table)
         p = {}
         q = """
         SELECT table_name 
@@ -154,7 +187,31 @@ class DB(DB0):
         b = set(columnNames)
         return a.issubset(b) and b.issubset(a)
 
-    def exportToFile(self, path, invert=False, explain=False, schemas=None, restoreTables=None):
+    async def async_tableExists(self, table, columnNames):
+        schema, _table = self.util.schemaTableSplit(table)
+        p = {}
+        q = """
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE  table_name = {} AND ({} = 1 OR table_schema = {})
+        LIMIT 2
+        """.format(*self.util.ps(p, [table, 0 if schema else 1, schema]))
+        rows = [r for r in await self.async_query((q, p), debug=False)]
+        if len(rows) != 1:
+            return False
+
+        p = {}
+        q = """
+        SELECT *
+        FROM information_schema.columns
+        WHERE  table_name = {} AND ({} = 1 OR table_schema = {})
+        """.format(*self.util.ps(p, [table, 0 if schema else 1, schema]))
+        rows = await self.async_query((q, p), debug=False)
+        a = set([row['column_name'] for row in rows])
+        b = set(columnNames)
+        return a.issubset(b) and b.issubset(a)
+
+    def exportToFile(self, path, invert=False, explain=False, schemas=None, restoreTables=None, create=False):
 
         errs = []
 
@@ -188,9 +245,10 @@ class DB(DB0):
                 '--clean' if restoreTables is None else None,
                 '--if-exists' if restoreTables is None else None,
                 # '--format=' + format,
-                '--single-transaction',
+                '--single-transaction' if not create else None,
                 '--strict-names',
                 '--verbose',
+                '--create' if create else None,
                 path,
             ]
             if not restoreTables is None:
@@ -198,7 +256,8 @@ class DB(DB0):
                     raise DBError('Nothing to restore. No tables given.')
                 for table in restoreTables:
                     for schema in schemas:
-                        preQueries.append('TRUNCATE {}.{}'.format(schema, table))
+                        preQueries.append(
+                            'TRUNCATE {}.{}'.format(schema, table))
                     args.append('--table={}'.format(table))
         else:
             args = [
@@ -220,14 +279,17 @@ class DB(DB0):
         self.log.info(str(args))
 
         if len(preQueries) > 0:
-            self.log.warning('Running queries outside {} transaction'.format(prettyAction))
+            self.log.warning(
+                'Running queries outside {} transaction'.format(prettyAction))
             preQueries = ['BEGIN'] + preQueries + ['COMMIT']
             for q in preQueries:
                 self.log.info(q)
                 if not explain:
                     self.query(q)
 
-        returnCode = SubProcessHelper.run(args, outErrSink=explainSink if explain else runSink, log=self.log)
+        # returnCode = subprocess.run(args)
+        returnCode = SubProcessHelper.run(
+           args, outErrSink=explainSink if explain else runSink, log=self.log)
 
         if returnCode != 0:
             for err in errs:
@@ -237,21 +299,52 @@ class DB(DB0):
 
     def startTransaction(self):
         if len(self.savepoints) == 0:
-            self.query('BEGIN'.format(id), debug=None);
+            self.query('BEGIN'.format(id), debug=None)
 
         return super().startTransaction()
 
     def rollback(self):
         res = super().rollback()
         if len(self.savepoints) == 0:
-            self.query('ROLLBACK'.format(id), debug=None);
+            self.query('ROLLBACK'.format(id), debug=None)
         return res
 
     def commit(self):
         res = super().commit()
         if len(self.savepoints) == 0:
-            self.query('COMMIT'.format(id), debug=None);
+            self.query('COMMIT'.format(id), debug=None)
         return res
+
+    @staticmethod
+    def hashQuery(q, p=None, prefix: str = '', suffix: str = ''):
+        _hash = str(xxh32(q+dumps(p)).hexdigest())
+        return prefix + _hash + suffix
+
+    def materialized(self, q: str, p: dict = {}, name: str = '', created: str = None):
+
+        viewName = self.hashQuery(q, p, prefix=name)
+
+        qCreate = '''
+            select _q.*
+        '''.format()
+
+        if created:
+            '''
+            {}, now() {}
+        '''.format(q, created)
+
+        qCreate = '''
+            {}
+            from ({}) _q
+        '''.format(qCreate, q)
+
+        qCreate = '''
+            create materialized view if not exists "{}" as {}
+        '''.format(viewName, qCreate)
+
+        self.query((qCreate, p))
+
+        return viewName
 
     @classmethod
     def schemaQuery(cls, p={}, schemaRE=None):
@@ -284,7 +377,6 @@ class DB(DB0):
         INNER JOIN pg_index _ix ON _ix.indexrelid = _cl.oid
         WHERE _ixs.schemaname NOT IN ('pg_catalog')
         '''
-
 
         qp = (q, p)
         pipes = Pipes()

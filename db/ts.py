@@ -21,6 +21,17 @@ class Ts:
 
         return _
 
+    def listTCreator(T):
+
+        def helper(val: list, inverse=False):
+
+            if inverse:
+                return [T(item, inverse) for item in jsonpickle.loads(val)]
+
+            return jsonpickle.dumps([T(item) for item in val])
+
+        return helper
+
     def str(val, inverse=False):
         return None if val is None else str(val)
 
@@ -54,14 +65,14 @@ class Ts:
         if inverse:
             return datetime.strptime(val, '%Y-%m-%d')
 
-        #print('val', val)
+        # print('val', val)
         return val if isinstance(val, str) else val.strftime('%Y-%m-%d')
 
     def floatAsStr(val, inverse=False):
         if inverse:
             return float(val)
 
-        #print('val', val)
+        # print('val', val)
         return str(val)
 
     def nullableDateAsStr(val, inverse=False):
@@ -70,7 +81,7 @@ class Ts:
                 return datetime.strptime(val, '%Y-%m-%d')
             return None
 
-        #print('val', val)
+        # print('val', val)
         if val == '' or val is None:
             return ''
         return val if isinstance(val, str) else val.strftime('%Y-%m-%d')
@@ -85,7 +96,7 @@ class Ts:
     def nullableDateTimeAsStr(val, inverse=False):
         if inverse:
             if val != '':
-                return datetime.fromisoformat()
+                return datetime.fromisoformat(val)
             return None
 
         if val == '' or val is None:
@@ -107,12 +118,12 @@ class Ts:
         if inverse:
             res = jsonpickle.decode(val)
             return res
-        #res = val.tolist()
-        #res = np.asarray(val)
+        # res = val.tolist()
+        # res = np.asarray(val)
         res = jsonpickle.encode(val)
         return res
 
-    #def Class(val, inverse=False):
+    # def Class(val, inverse=False):
     #    if inverse:
     #        res = dill.load(val)
     #        return res
