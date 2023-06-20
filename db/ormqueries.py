@@ -3,30 +3,29 @@ import ramda as R
 import itertools
 import inspect
 
-from contrib.p4thpy.model import Model
-from contrib.p4thpy.tools import Tools
+from .util import Util
 
 
-class ColumnSpecModel(Model):
+class ColumnSpecModel:
 
-    def __init__(self, row, *args, **kwargs):
-        super().__init__(row, *args, **kwargs)
+    def __init__(self, columSpec):
+        self.columnSpec = columSpec
 
     def transform(self, val, inverse=False):
-        return val if 'transform' not in self else (self['transform'](val, inverse))
+        return val if 'transform' not in self.columnSpec else (self.columnSpec['transform'](val, inverse))
 
 
-class TableSpecModel(Model):
+class TableSpecModel:
 
-    def __init__(self, row, *args, **kwargs):
-        super().__init__(row, *args, **kwargs)
+    def __init__(self, tableSpec):
+        self.tableSpec = tableSpec
 
     def allColumns(self, sort=True, quote=True):
-        return [column for column, spec in Tools.keyValIter(self['columnSpecs'], sort=sort)]
+        return [column for column, spec in Util.keyValIter(self.tableSpec['columnSpecs'], sort=sort)]
 
     def Ts(self, inverse=False):
         return {
-            name: spec['transform'] for name, spec in Tools.keyValIter(self['columnSpecs'], sort=True) if 'transform' in spec
+            name: spec['transform'] for name, spec in Util.keyValIter(self.tableSpec['columnSpecs'], sort=True) if 'transform' in spec
         }
 
 
@@ -122,7 +121,7 @@ class ORMQueries:
 
         model = TableSpecModel(tableSpec)
         columnModelMap = {
-            name: ColumnSpecModel(spec) for name, spec in Tools.keyValIter(tableSpec['columnSpecs'], sort=True)
+            name: ColumnSpecModel(spec) for name, spec in Util.keyValIter(tableSpec['columnSpecs'], sort=True)
         }
 
         def insertHelper(rows):
@@ -175,7 +174,7 @@ class ORMQueries:
     @classmethod
     def isSingleRowResult(cls, rows):
         if not inspect.isgenerator(rows):
-            return rows is not None and len(rows) == 1, rows            
+            return rows is not None and len(rows) == 1, rows
 
         nextRows, _rows = cls.peek(rows, 2)
 
@@ -198,10 +197,10 @@ class ORMQueries:
         if len(valueColumns) < 1 and returning is None:
             return
         valSpecs = {
-            col: ColumnSpecModel(tableSpec['columnSpecs'][col]) for i, col in Tools.keyValIter(valueColumns, sort=True)
+            col: ColumnSpecModel(tableSpec['columnSpecs'][col]) for i, col in Util.keyValIter(valueColumns, sort=True)
         }
         keySpecs = {
-            col: ColumnSpecModel(tableSpec['columnSpecs'][col]) for i, col in Tools.keyValIter(tableSpec['primaryKeys'], sort=True)
+            col: ColumnSpecModel(tableSpec['columnSpecs'][col]) for i, col in Util.keyValIter(tableSpec['primaryKeys'], sort=True)
         }
 
         for i, row in enumerate(rows):
@@ -209,13 +208,13 @@ class ORMQueries:
             valAssigns = [
                 '{} = {}'.format(self.util.quote(col), self.util.p(
                     p, spec.transform(row[col], inverse=False)))
-                for col, spec in Tools.keyValIter(valSpecs, sort=True)
+                for col, spec in Util.keyValIter(valSpecs, sort=True)
                 if col in row
             ]
             keyWheres = [
                 '{} = {}'.format(self.util.quote(col), self.util.p(
                     p, spec.transform(row[col], inverse=False)))
-                for col, spec in Tools.keyValIter(keySpecs, sort=True)
+                for col, spec in Util.keyValIter(keySpecs, sort=True)
                 if col in row
             ]
 
@@ -294,7 +293,7 @@ class ORMQueries:
             {
                 col: ColumnSpecModel(
                     tableSpec['columnSpecs'][col]).transform(val)
-                for col, val in Tools.keyValIter(keyMap)
+                for col, val in Util.keyValIter(keyMap)
             } for keyMap in keyMaps
         ]
 
@@ -357,14 +356,14 @@ class ORMQueries:
 
         q = 'SELECT {} FROM {}'.format(allColumns, self.util.quote(view))
         p = []
-        T = {name: cs['transform'] for name, cs in Tools.keyValIter(
+        T = {name: cs['transform'] for name, cs in Util.keyValIter(
             viewSpec['columnSpecs'], sort=True)}
         return (q, p, T)
 
     @staticmethod
     def allColumns(tableSpec):
         return [
-            '"{}"'.format(columnSpec[column]) for column, spec in Tools.keyValIter(tableSpec, sort=True)
+            '"{}"'.format(columnSpec[column]) for column, spec in Util.keyValIter(tableSpec, sort=True)
         ]
 
     @property

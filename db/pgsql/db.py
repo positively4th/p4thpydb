@@ -1,6 +1,5 @@
 from json import dumps
 import psycopg
-import subprocess
 from xxhash import xxh32
 
 from ..db import DB as DB0
@@ -10,7 +9,11 @@ from .pipes import Pipes
 from ..ts import Ts
 import re
 
-from contrib.p4thpy.subprocesshelper import SubProcessHelper
+import subprocess
+try:
+    from contrib.p4thpy.subprocesshelper import SubProcessHelper
+except Exception as e:
+    SubProcessHelper = 'Error: SubProcessHelper: ' + str(e)
 
 parameterMatchers = [
     r'([(][{}].*?)'.format(Util.pNamePrefix)  # <-- safe form = (:...)s
@@ -215,18 +218,25 @@ class DB(DB0):
 
         errs = []
 
+        def verifySubProcessHelper():
+            assert not isinstance(SubProcessHelper, str), SubProcessHelper
+
         def explainSink(out, err):
             nonlocal errs
 
             if not out is None:
+                verifySubProcessHelper()
                 print(SubProcessHelper.decode(out).rstrip())
             if not err is None:
+                verifySubProcessHelper()
                 errs.append(SubProcessHelper.decode(err).rstrip())
 
         def runSink(out, err):
             if not out is None:
+                verifySubProcessHelper()
                 self.log.debug(SubProcessHelper.decode(out).rstrip())
             if not err is None:
+                verifySubProcessHelper()
                 self.log.info(SubProcessHelper.decode(err).rstrip())
 
         prettyAction = 'restore' if invert else 'dump'
@@ -287,9 +297,12 @@ class DB(DB0):
                 if not explain:
                     self.query(q)
 
-        # returnCode = subprocess.run(args)
-        returnCode = SubProcessHelper.run(
-           args, outErrSink=explainSink if explain else runSink, log=self.log)
+        if isinstance(SubProcessHelper, str):
+            returnCode = subprocess.run(args)
+        else:
+            verifySubProcessHelper()
+            returnCode = SubProcessHelper.run(
+                args, outErrSink=explainSink if explain else runSink, log=self.log)
 
         if returnCode != 0:
             for err in errs:

@@ -1,5 +1,3 @@
-from contrib.p4thpy.tools import Tools
-
 from ..orm_async import ORM as ORM0
 from .pipes import Pipes
 from .util import Util
