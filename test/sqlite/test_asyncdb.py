@@ -1,7 +1,7 @@
 import unittest
 from collections import OrderedDict
 
-from db.sqlite.db import DB
+from db.sqlite.db_async import DB
 from db.sqlite.util import Util
 from db.ts import Ts
 from db.sqlite.orm_async import ORM
@@ -94,14 +94,14 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
             {'team_id': 't2', 'name': 'n2', 'country': '2', 'verified': 0, }
         ], debug=False)
         # assert 1 == 0
-        rows = await db.async_query(orm.select(tableSpec))
+        rows = await db.query(orm.select(tableSpec))
         rows.sort(key=lambda row: row['team_id'])
         assert 'n1' == rows[0]['name']
         assert True == rows[0]['verified']
         assert 'n2' == rows[1]['name']
         assert False == rows[1]['verified']
 
-        rows = await db.async_query(orm.view(tableSpec, view='prefixed'))
+        rows = await db.query(orm.view(tableSpec, view='prefixed'))
         rows.sort(key=lambda row: row['team_id'])
         assert '__n1' == rows[0]['name']
         assert True == rows[0]['verified']
@@ -112,7 +112,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
             {'team_id': 't1', 'verified': False, },
             {'team_id': 't2', 'verified': 1, }
         ])
-        rows = await db.async_query(orm.select(tableSpec))
+        rows = await db.query(orm.select(tableSpec))
         rows.sort(key=lambda row: row['team_id'])
         assert 'n1' == rows[0]['name']
         assert False == rows[0]['verified']
@@ -128,7 +128,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
         await orm.upsert(tableSpec, [
             {'team_id': 't2', 'name': 'n2', 'country': '2', 'verified': 0, 'index': 0}
         ])
-        rows = await db.async_query(orm.select(tableSpec))
+        rows = await db.query(orm.select(tableSpec))
         rows.sort(key=lambda row: row['team_id'])
         assert len(rows) == 1
         assert 'n2' == rows[0]['name']
@@ -140,7 +140,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
             {'team_id': 't2', 'name': 'n2', 'country': '2',
                 'verified': True, 'index': 20}
         ])
-        rows = await db.async_query(orm.select(tableSpec))
+        rows = await db.query(orm.select(tableSpec))
         rows.sort(key=lambda row: row['team_id'])
         assert len(rows) == 2
         assert 't1' == rows[0]['team_id']
@@ -158,13 +158,13 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
         db = DB(dbFile)
         pipes = Pipes()
         orm = ORM(db)
-        await db.async_query(
+        await db.query(
             'CREATE TABLE strvec3 (id TEXT, a REAL, b REAL, c REAL, PRIMARY KEY (id))')
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('111', 1, 1, 1)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('123', 1, 2, 3)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('222', 2, 2, 2)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('321', 3, 2, 1)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('333', 3, 3, 3)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('111', 1, 1, 1)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('123', 1, 2, 3)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('222', 2, 2, 2)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('321', 3, 2, 1)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('333', 3, 3, 3)")
         tableSpec = {
             'name': "strvec3",
             'columnSpecs': {
@@ -181,7 +181,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
 
         qpT = orm.select(tableSpec)
         qpT = pipes.order(qpT, ['id'])
-        rows = await db.async_query(qpT, debug=False)
+        rows = await db.query(qpT, debug=False)
         # for row in rows:
         #    print(row)
         assert rows[0]['id'] == '111'
@@ -204,25 +204,25 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
         pipes = Pipes()
         orm = ORM(db)
 
-        await db.async_query(
+        await db.query(
             'CREATE TABLE strvec3 (id TEXT, a REAL, b REAL, c REAL, PRIMARY KEY (id))')
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('111', 1, 1, 1)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('123', 1, 2, 3)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('222', 2, 2, 2)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('321', 3, 2, 1)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('333', 3, 3, 3)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('111', 1, 1, 1)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('123', 1, 2, 3)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('222', 2, 2, 2)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('321', 3, 2, 1)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('333', 3, 3, 3)")
 
-        await db.async_query('CREATE TABLE {} (id TEXT, a REAL, b REAL, c REAL, PRIMARY KEY (id))'.format(
+        await db.query('CREATE TABLE {} (id TEXT, a REAL, b REAL, c REAL, PRIMARY KEY (id))'.format(
             util.quote('t mp._tstrvec3')), debug=False)
-        await db.async_query("INSERT INTO {} (id, a, b, c) VALUES ('111', 10, 10, 10)".format(
+        await db.query("INSERT INTO {} (id, a, b, c) VALUES ('111', 10, 10, 10)".format(
             util.quote('t mp._tstrvec3')))
-        await db.async_query("INSERT INTO {} (id, a, b, c) VALUES ('123', 10, 20, 30)".format(
+        await db.query("INSERT INTO {} (id, a, b, c) VALUES ('123', 10, 20, 30)".format(
             util.quote('t mp._tstrvec3')))
-        await db.async_query("INSERT INTO {} (id, a, b, c) VALUES ('222', 20, 20, 20)".format(
+        await db.query("INSERT INTO {} (id, a, b, c) VALUES ('222', 20, 20, 20)".format(
             util.quote('t mp._tstrvec3')))
-        await db.async_query("INSERT INTO {} (id, a, b, c) VALUES ('321', 30, 20, 10)".format(
+        await db.query("INSERT INTO {} (id, a, b, c) VALUES ('321', 30, 20, 10)".format(
             util.quote('t mp._tstrvec3')))
-        await db.async_query("INSERT INTO {} (id, a, b, c) VALUES ('333', 30, 30, 30)".format(
+        await db.query("INSERT INTO {} (id, a, b, c) VALUES ('333', 30, 30, 30)".format(
             util.quote('t mp._tstrvec3')))
 
         # Pipes
@@ -233,7 +233,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
             {'a': 1, 'b': 1, 'c': 1},
             {'a': 3, 'b': 2, 'c': 1},
         ])
-        rows = await db.async_query((q, p, T))
+        rows = await db.query((q, p, T))
         assert len(rows) == 2
 
         # map, pipes
@@ -242,7 +242,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
         qpT = pipes.concat((q, p), pipes=[
             [pipes.equals, {'map': {'a': 1, 'b': 1, 'c': 1}}]
         ])
-        rows = await db.async_query((qpT))
+        rows = await db.query((qpT))
         assert len(rows) == 1
         assert rows[0]['id'] == '111'
 
@@ -253,7 +253,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
             [pipes.like, {'expr': 'id', 'pattern': '%2%'}],
             [pipes.order, {'exprs': ['id'], 'orders':['DESC']}],
         ])
-        rows = await db.async_query((q, p, T))
+        rows = await db.query((q, p, T))
         assert len(rows) == 3
         assert rows[2]['id'] == '123'
         assert rows[1]['id'] == '222'
@@ -268,7 +268,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
                            'orders':['DESC', 'DESC', 'DESC']}],
             [pipes.limit, {'limit': 10}],
         ])
-        rows = await db.async_query((q, p, T))
+        rows = await db.query((q, p, T))
         assert len(rows) == 3
         assert rows[0]['id'] == '333'
         assert rows[1]['id'] == '321'
@@ -285,7 +285,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
         # [id, a, b, c] VALUES ('222', 2, 2, 2), ('321', 3, 2, 1), ('333', 3, 3, 3)
 
         # print(rows)
-        rows = await db.async_query((q, p, T))
+        rows = await db.query((q, p, T))
         assert len(rows) == 2
         assert rows[0]['id'] == '321'
         assert rows[1]['id'] == '222'
@@ -304,7 +304,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
             ],
             [pipes.order, {'exprs': ['id'], 'orders':['DESC']}],
         ])
-        rows = await db.async_query((q, p, T))
+        rows = await db.query((q, p, T))
         assert len(rows) == 2
         assert rows[0]['id'] == '333'
         assert rows[1]['id'] == '222'
@@ -323,7 +323,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
             ],
             [pipes.order, {'exprs': ['id'], 'orders':['DESC']}],
         ])
-        rows = await db.async_query((q, p, T))
+        rows = await db.query((q, p, T))
         assert len(rows) == 1
         assert rows[0]['id'] == '111'
 
@@ -337,20 +337,20 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
                        'orders':['DESC', 'DESC', 'DESC']}],
             [pipes.limit, {'limit': 2, 'offset': 2}]
         ])
-        rows = await db.async_query((q, p, T))
+        rows = await db.query((q, p, T))
         assert len(rows) == 1
         assert rows[0]['id'] == '123'
 
         # aggregate
         db = DB(dbFile)
-        await db.async_query(
+        await db.query(
             'CREATE TABLE strvec3 (id TEXT, a REAL, b REAL, c REAL, PRIMARY KEY (id))')
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('111', 1, 1, 1)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('113', 1, 1, 3)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('123', 1, 2, 3)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('222', 2, 2, 2)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('321', 3, 2, 1)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('333', 3, 3, 3)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('111', 1, 1, 1)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('113', 1, 1, 3)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('123', 1, 2, 3)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('222', 2, 2, 2)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('321', 3, 2, 1)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('333', 3, 3, 3)")
         q = 'SELECT * FROM strvec3'
         p = []
         q, p, T = pipes.order(
@@ -359,7 +359,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
             }, ['id'], quote=True
             ), ['id']
         )
-        rows = await db.async_query((q, p, T))
+        rows = await db.query((q, p, T))
         # print(rows)
         assert len(rows) == 6
         assert rows[0]['id'] == '111'
@@ -380,7 +380,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
             }, quote=True
             ), ['subid']
         )
-        rows = await db.async_query((q, p, T))
+        rows = await db.query((q, p, T))
         # print(rows)
         assert len(rows) == 5
         assert rows[0]['subid'] == '11'
@@ -408,27 +408,26 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
         pipes = Pipes()
         orm = ORM(db)
 
-        await db.async_query(
+        await db.query(
             'CREATE TABLE strvec3 (id TEXT, a REAL, b REAL, c REAL, PRIMARY KEY (id))')
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('111', 1, 1, 1)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('123', 1, 2, 3)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('222', 2, 2, 2)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('321', 3, 2, 1)")
-        await db.async_query("INSERT INTO strvec3 (id, a, b, c) VALUES ('333', 3, 3, 3)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('111', 1, 1, 1)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('123', 1, 2, 3)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('222', 2, 2, 2)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('321', 3, 2, 1)")
+        await db.query("INSERT INTO strvec3 (id, a, b, c) VALUES ('333', 3, 3, 3)")
 
-        await db.async_query('CREATE TABLE {} (id TEXT, a REAL, b REAL, c REAL, PRIMARY KEY (id))'.format(
+        await db.query('CREATE TABLE {} (id TEXT, a REAL, b REAL, c REAL, PRIMARY KEY (id))'.format(
             util.quote('t mp._tstrvec3')), debug=False)
-        await db.async_query("INSERT INTO {} (id, a, b, c) VALUES ('111', 10, 10, 10)".format(
+        await db.query("INSERT INTO {} (id, a, b, c) VALUES ('111', 10, 10, 10)".format(
             util.quote('t mp._tstrvec3')))
-        await db.async_query("INSERT INTO {} (id, a, b, c) VALUES ('123', 10, 20, 30)".format(
+        await db.query("INSERT INTO {} (id, a, b, c) VALUES ('123', 10, 20, 30)".format(
             util.quote('t mp._tstrvec3')))
-        await db.async_query("INSERT INTO {} (id, a, b, c) VALUES ('222', 20, 20, 20)".format(
+        await db.query("INSERT INTO {} (id, a, b, c) VALUES ('222', 20, 20, 20)".format(
             util.quote('t mp._tstrvec3')))
-        await db.async_query("INSERT INTO {} (id, a, b, c) VALUES ('321', 30, 20, 10)".format(
+        await db.query("INSERT INTO {} (id, a, b, c) VALUES ('321', 30, 20, 10)".format(
             util.quote('t mp._tstrvec3')))
-        await db.async_query("INSERT INTO {} (id, a, b, c) VALUES ('333', 30, 30, 30)".format(
+        await db.query("INSERT INTO {} (id, a, b, c) VALUES ('333', 30, 30, 30)".format(
             util.quote('t mp._tstrvec3')))
-
 
 
 if __name__ == '__main__':

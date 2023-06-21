@@ -12,7 +12,7 @@ class ORM(ORMQueries):
         self.db = db
 
     def query(self, qpT, *args, **kwargs):
-        return self.db.async_query(qpT, *args, **kwargs)
+        return self.db.query(qpT, *args, **kwargs)
 
     def queries(self, args):
         return asyncio.gather(*[self.query(_[0], **_[1]) for _ in args])
@@ -20,7 +20,7 @@ class ORM(ORMQueries):
     async def tableExists(self, tableSpec):
         model = TableSpecModel(tableSpec)
         # allColumns = ', '.join(self.util.quote(model.allColumns()))
-        return await self.db.async_tableExists(tableSpec['name'], model.allColumns())
+        return await self.db.tableExists(tableSpec['name'], model.allColumns())
 
     async def createTable(self, tableSpec):
         await self.queries(self._createTable(tableSpec))
@@ -28,18 +28,16 @@ class ORM(ORMQueries):
 
     async def ensureTable(self, tableSpec):
         res = not await self.tableExists(tableSpec)
-        qArgs = []
         if res:
-            qArgs += self._createTable(tableSpec)
-            qArgs += self._createViews(tableSpec)
-            await self.queries(qArgs)
+            await self.queries(self._createTable(tableSpec))
+            await self.queries(self._createViews(tableSpec))
         return res
 
-    async def dropTable(self, tableSpec):
+    def dropTable(self, tableSpec):
         qArgs = []
         qArgs += self._dropViews(tableSpec)
         qArgs += self._dropTable(tableSpec)
-        await self.queries(qArgs)
+        return self.queries(qArgs)
 
     def insert(self, tableSpec, rows, returning=None, debug=False):
         qArgs = self._insert(tableSpec, rows, returning)

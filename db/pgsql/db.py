@@ -49,27 +49,7 @@ class DB(DB0):
         from .util import Util as _PGUtil
         return _PGUtil()
 
-    async def async_db(self):
-        if self._async_db is None:
-            self._async_db = await psycopg.AsyncConnection.connect(self.url, autocommit=True, row_factory=psycopg.rows.dict_row)
-        return self._async_db
-
-    async def async_query(self, qpT, debug=None):
-        q, p, T = self.util.qpTSplit(qpT)
-        q = DB.protectMod(q)
-        T = Ts.transformerFactory(T, inverse=True)
-
-        db = await self.async_db()
-        async with db.cursor() as cursor:
-            await cursor.execute(q, p)
-            if cursor.rownumber is not None:
-                rows = await cursor.fetchall()
-            else:
-                return None
-
-        return [T(row) for row in rows]
-
-    def __init__(self, url=None, log=None, aSync=False, **kwargs):
+    def __init__(self, url=None, log=None, **kwargs):
         super().__init__(Util(), log=log)
 
         self._url = self.createURL(**kwargs) if url is None else url
@@ -77,7 +57,6 @@ class DB(DB0):
         self.log.debug('url %s' % self.url)
         self.db = self.connect()
         self._cursor = None
-        self._async_db = None
 
     def connect(self):
         return psycopg.connect(self.url, autocommit=True)
@@ -102,9 +81,6 @@ class DB(DB0):
         if hasattr(self, 'db'):
             self.db.close()
             self.db = None
-        if self._async_db is not None:
-            self._async_db.close()
-            self._async_db = None
 
     def _queryHelper(self, qpT, transformer=None, stripParams=False, fetch=True, debug=None):
 
@@ -190,29 +166,6 @@ class DB(DB0):
         b = set(columnNames)
         return a.issubset(b) and b.issubset(a)
 
-    async def async_tableExists(self, table, columnNames):
-        schema, _table = self.util.schemaTableSplit(table)
-        p = {}
-        q = """
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE  table_name = {} AND ({} = 1 OR table_schema = {})
-        LIMIT 2
-        """.format(*self.util.ps(p, [table, 0 if schema else 1, schema]))
-        rows = [r for r in await self.async_query((q, p), debug=False)]
-        if len(rows) != 1:
-            return False
-
-        p = {}
-        q = """
-        SELECT *
-        FROM information_schema.columns
-        WHERE  table_name = {} AND ({} = 1 OR table_schema = {})
-        """.format(*self.util.ps(p, [table, 0 if schema else 1, schema]))
-        rows = await self.async_query((q, p), debug=False)
-        a = set([row['column_name'] for row in rows])
-        b = set(columnNames)
-        return a.issubset(b) and b.issubset(a)
 
     def exportToFile(self, path, invert=False, explain=False, schemas=None, restoreTables=None, create=False):
 

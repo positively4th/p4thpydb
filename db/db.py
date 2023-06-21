@@ -98,9 +98,6 @@ class DB:
 
         return gen
 
-    async def async_query(self, qpT, transformer=None, stripParams=False, debug=None):
-        assert False, 'Not implemented'
-
     @classmethod
     def constantRows(cls, colTypeMap: dict, rows: tuple | list):
 
