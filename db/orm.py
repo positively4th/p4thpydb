@@ -46,10 +46,10 @@ class ORM(ORMQueries):
         # allColumns = ', '.join(self.util.quote(model.allColumns()))
         return self.db.tableExists(tableSpec['name'], model.allColumns())
 
-    def insert(self, tableSpec, rows, returning=None, debug=False):
-        qArgs = self._insert(tableSpec, rows, returning)
-        if qArgs is None:
-            return []
+    def insert(self, tableSpec, rows, returning=None, batchSize=None, debug=False):
+        _batchSize = self.defBatchSize if batchSize is None else batchSize
+        qArgs = self._insert(
+            tableSpec, rows, returning=returning, batchSize=_batchSize)
         return self.queries(qArgs)
 
     def update(self, tableSpec, rows, debug=False, returning=None):
@@ -60,10 +60,19 @@ class ORM(ORMQueries):
         assert res is None or len(res) == len(rows)
         return res
 
-    def upsert(self, tableSpec, rows, fetchAll=False, batchSize=200, debug=False):
+    def upsert(self, tableSpec, rows, fetchAll=False, batchSize=None, debug=False):
+        _batchSize = self.defBatchSize if batchSize is None else batchSize
         updates = self._upsertUpdate(tableSpec, rows)
         res = self.queries(updates)
-        ups, ins = self._upsertInsert(tableSpec, rows, res)
+        ups, ins = self._upsertInsert(
+            tableSpec, rows, res, batchSize=_batchSize)
+
+        if ins is None:
+            assert ins is not None
+        for i in ins:
+            if ins is None:
+                pass
+            assert i is not None
 
         ins = self.queries(ins)
 

@@ -6,7 +6,6 @@
 	&& make
 )
 
-# Optional for SubprocessHelper
-#(
-#    git clone ssh://git@p4th.net/home/git/p4thpy.git
-#)
+(
+	git clone https://github.com/positively4th/p4thpymisc.git
+)

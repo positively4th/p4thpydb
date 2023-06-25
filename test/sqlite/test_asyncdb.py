@@ -92,7 +92,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
         await orm.insert(tableSpec, [
             {'team_id': 't1', 'name': 'n1', 'country': '1', 'verified': True, },
             {'team_id': 't2', 'name': 'n2', 'country': '2', 'verified': 0, }
-        ], debug=False)
+        ], batchSize=1)
         # assert 1 == 0
         rows = await db.query(orm.select(tableSpec))
         rows.sort(key=lambda row: row['team_id'])
@@ -139,7 +139,7 @@ class TestAsyncDBSQLite(unittest.IsolatedAsyncioTestCase):
                 'country': '1', 'verified': 0, 'index': 10},
             {'team_id': 't2', 'name': 'n2', 'country': '2',
                 'verified': True, 'index': 20}
-        ])
+        ], batchSize=1)
         rows = await db.query(orm.select(tableSpec))
         rows.sort(key=lambda row: row['team_id'])
         assert len(rows) == 2

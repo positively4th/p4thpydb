@@ -3,7 +3,7 @@ import ramda as R
 import itertools
 import inspect
 
-from .util import Util
+from contrib.p4thpymisc.src.misc import items
 
 
 class ColumnSpecModel:
@@ -21,15 +21,17 @@ class TableSpecModel:
         self.tableSpec = tableSpec
 
     def allColumns(self, sort=True, quote=True):
-        return [column for column, spec in Util.keyValIter(self.tableSpec['columnSpecs'], sort=sort)]
+        return [column for column, spec in items(self.tableSpec['columnSpecs'], sort=sort)]
 
     def Ts(self, inverse=False):
         return {
-            name: spec['transform'] for name, spec in Util.keyValIter(self.tableSpec['columnSpecs'], sort=True) if 'transform' in spec
+            name: spec['transform'] for name, spec in items(self.tableSpec['columnSpecs'], sort=True) if 'transform' in spec
         }
 
 
 class ORMQueries:
+
+    defBatchSize = 200
 
     __DEBUG__ = False
 
@@ -117,11 +119,11 @@ class ORMQueries:
         q = 'DROP VIEW IF  EXISTS {}'.format(self.util.quote(viewName))
         return [((q, {}), {})]
 
-    def _insert(self, tableSpec, rows: tuple | list, returning=None):
+    def _insert(self, tableSpec, rows: tuple | list, batchSize, returning=None):
 
         model = TableSpecModel(tableSpec)
         columnModelMap = {
-            name: ColumnSpecModel(spec) for name, spec in Util.keyValIter(tableSpec['columnSpecs'], sort=True)
+            name: ColumnSpecModel(spec) for name, spec in items(tableSpec['columnSpecs'], sort=True)
         }
 
         def insertHelper(rows):
@@ -146,7 +148,7 @@ class ORMQueries:
             return qpT, {}
 
         if len(rows) < 1:
-            return None
+            return []
 
         allColumns = model.allColumns()
 
@@ -156,7 +158,10 @@ class ORMQueries:
 
         res = []
         for _, rows in rowGroups.items():
-            res.append(insertHelper(rows))
+            rowCtr = 0
+            while rowCtr < len(rows):
+                res.append(insertHelper(rows[rowCtr:rowCtr+batchSize]))
+                rowCtr += batchSize
 
         return res
 
@@ -197,10 +202,10 @@ class ORMQueries:
         if len(valueColumns) < 1 and returning is None:
             return
         valSpecs = {
-            col: ColumnSpecModel(tableSpec['columnSpecs'][col]) for i, col in Util.keyValIter(valueColumns, sort=True)
+            col: ColumnSpecModel(tableSpec['columnSpecs'][col]) for i, col in items(valueColumns, sort=True)
         }
         keySpecs = {
-            col: ColumnSpecModel(tableSpec['columnSpecs'][col]) for i, col in Util.keyValIter(tableSpec['primaryKeys'], sort=True)
+            col: ColumnSpecModel(tableSpec['columnSpecs'][col]) for i, col in items(tableSpec['primaryKeys'], sort=True)
         }
 
         for i, row in enumerate(rows):
@@ -208,13 +213,13 @@ class ORMQueries:
             valAssigns = [
                 '{} = {}'.format(self.util.quote(col), self.util.p(
                     p, spec.transform(row[col], inverse=False)))
-                for col, spec in Util.keyValIter(valSpecs, sort=True)
+                for col, spec in items(valSpecs, sort=True)
                 if col in row
             ]
             keyWheres = [
                 '{} = {}'.format(self.util.quote(col), self.util.p(
                     p, spec.transform(row[col], inverse=False)))
-                for col, spec in Util.keyValIter(keySpecs, sort=True)
+                for col, spec in items(keySpecs, sort=True)
                 if col in row
             ]
 
@@ -234,7 +239,7 @@ class ORMQueries:
             qArgs.append((qpT, {}))
         return qArgs
 
-    def _upsertInsert(self, tableSpec, rows, res):
+    def _upsertInsert(self, tableSpec, rows, res, batchSize):
 
         ups = []
         ins = []
@@ -248,27 +253,12 @@ class ORMQueries:
             if insRow is not None:
                 ins.append(insRow)
 
-        return ups, self._insert(tableSpec, ins, returning=tableSpec['primaryKeys'])
+        return ups, self._insert(tableSpec, ins, returning=tableSpec['primaryKeys'], batchSize=batchSize)
 
     def _upsertUpdate(self, tableSpec, rows):
-
         res = self._update(
             tableSpec, rows, returning=tableSpec['primaryKeys'])
         return res
-        bs = len(rows) if batchSize is None else batchSize
-
-        while len(rows) > 0:
-            batch = rows[0:bs]
-            rows = rows[bs:len(rows)]
-            updRes = self.update(
-                tableSpec, batch, returning=tableSpec['primaryKeys'], debug=debug)
-            insRes = [batch[i] for i, r in enumerate(updRes) if r is None]
-            insRes = self.insert(
-                tableSpec, insRes, returning=tableSpec['primaryKeys'], debug=debug)
-
-        if fetchAll:
-            return [r for r in rows]
-        return rows
 
     def join(self, qpT, relatedSpec):
 
@@ -293,7 +283,7 @@ class ORMQueries:
             {
                 col: ColumnSpecModel(
                     tableSpec['columnSpecs'][col]).transform(val)
-                for col, val in Util.keyValIter(keyMap)
+                for col, val in items(keyMap)
             } for keyMap in keyMaps
         ]
 
@@ -356,14 +346,14 @@ class ORMQueries:
 
         q = 'SELECT {} FROM {}'.format(allColumns, self.util.quote(view))
         p = []
-        T = {name: cs['transform'] for name, cs in Util.keyValIter(
+        T = {name: cs['transform'] for name, cs in items(
             viewSpec['columnSpecs'], sort=True)}
         return (q, p, T)
 
     @staticmethod
     def allColumns(tableSpec):
         return [
-            '"{}"'.format(columnSpec[column]) for column, spec in Util.keyValIter(tableSpec, sort=True)
+            '"{}"'.format(columnSpec[column]) for column, spec in items(tableSpec, sort=True)
         ]
 
     @property

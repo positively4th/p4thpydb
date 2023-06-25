@@ -1,6 +1,8 @@
 from uuid import uuid4
 import re
 
+from contrib.p4thpymisc.src.misc import items
+
 
 class UtilError(Exception):
     pass
@@ -36,23 +38,6 @@ class Util():
             res = res + sep + caster(suffix)
 
         return res
-
-    @staticmethod
-    def keyValIter(inst, sort=False):
-
-        if (not isinstance(inst, str)):
-            try:
-                return sorted(inst.items()) if sort else inst.items()
-            except AttributeError as e:
-                pass
-            except TypeError as e:
-                pass
-            try:
-                return enumerate(inst)
-            except TypeError as e:
-                pass
-
-        return {None: inst}.items()
 
     @classmethod
     def parseIndexName(cls, fqn):
@@ -126,7 +111,7 @@ class Util():
 
     def ps(self, p, values, sep=None):
         names = []
-        for key, val in self.keyValIter(values):
+        for key, val in items(values):
             names.append(self.p(p, val, name=str(key)))
         return names if sep == None else sep.join(names)
 

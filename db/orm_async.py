@@ -39,25 +39,26 @@ class ORM(ORMQueries):
         qArgs += self._dropTable(tableSpec)
         return self.queries(qArgs)
 
-    def insert(self, tableSpec, rows, returning=None, debug=False):
-        qArgs = self._insert(tableSpec, rows, returning)
-        if qArgs is None:
-            return []
+    def insert(self, tableSpec, rows, returning=None, batchSize=None):
+        _batchSize = self.defBatchSize if batchSize is None else batchSize
+        qArgs = self._insert(
+            tableSpec, rows, returning=returning, batchSize=_batchSize)
         return self.queries(qArgs)
 
     async def update(self, tableSpec, rows, debug=False, returning=None):
-
         qArgs = self._update(tableSpec, rows, debug, returning)
         updRows = await self.queries(qArgs)
         res = self.ensureSingleRows(updRows)
         assert res is None or len(res) == len(rows)
         return res
 
-    async def upsert(self, tableSpec, rows, batchSize=200, debug=False):
+    async def upsert(self, tableSpec, rows, batchSize=None):
+        _batchSize = self.defBatchSize if batchSize is None else batchSize
         updates = self._upsertUpdate(tableSpec, rows)
         res = await self.queries(updates)
         res = ((r for r in rows) for rows in res)
-        ups, ins = self._upsertInsert(tableSpec, rows, res)
+        ups, ins = self._upsertInsert(
+            tableSpec, rows, res, batchSize=_batchSize)
         ins = await self.queries(ins)
 
         return ins + ups

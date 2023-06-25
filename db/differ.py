@@ -2,6 +2,7 @@ from uuid import uuid4
 import ramda as R
 
 from .util import Util
+from contrib.p4thpymisc.src.misc import items
 
 
 class QueryFactoryError(Exception):
@@ -22,13 +23,13 @@ class QueryFactory:
         cs = R.pipe(
             R.to_pairs,
             R.map(lambda rclc: (rclc[0],  '{}.{} = {}.{}'
-                             .format(self.util.quote(leftAlias),
-                                     self.util.quote(rclc[1]),
-                                     self.util.quote(rightAlias),
-                                     self.util.quote(rclc[0])))
-            ),
+                                .format(self.util.quote(leftAlias),
+                                        self.util.quote(rclc[1]),
+                                        self.util.quote(rightAlias),
+                                        self.util.quote(rclc[0])))
+                  ),
             R.from_pairs
-        
+
         )(_columns)
         return ' AND '.join(cs.values())
 
@@ -43,8 +44,8 @@ class QueryFactory:
             )'''.format(qL=qL, qR=qR)
 
         cs = R.map(lambda columnName: isDistcintFrom(self.util.quote(columnName, table=leftAlias),
-                                                         self.util.quote(columnName, table=rightAlias))
-                       )(columnNames)
+                                                     self.util.quote(columnName, table=rightAlias))
+                   )(columnNames)
         return ' OR '.join(cs)
 
     def latestChangeQuery(self, primaryKeyNames, changeTable, p={}):
@@ -143,7 +144,7 @@ class QueryRunner:
         _qps = (qps, {}) if isinstance(qps, str) else qps
         _qps = [_qps] if isinstance(_qps, tuple) else _qps
         res = []
-        for _, qp in Util.keyValIter(_qps):
+        for _, qp in items(_qps):
             _qp = (qp,) if isinstance(qp, str) else qp
             res.append(self.db.query(_qp, *args, fetchAll=True, **kwargs))
         return res[0] if isinstance(qps, tuple) or isinstance(qps, str) else res
@@ -239,7 +240,7 @@ class Differ:
         columnsByTable = R.group_by(columnsByTableEncoder)(spec['columns'])
         tableDiffMap = {
         } if 'tableDiffMap' not in spec else spec['tableDiffMap']
-        for table, columns in Util.keyValIter(columnsByTable):
+        for table, columns in items(columnsByTable):
             assert table in spec['tableCloneMap']
 
             diff = tableDiffMap[table] if table in tableDiffMap else {}

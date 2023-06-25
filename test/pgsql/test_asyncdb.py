@@ -105,7 +105,7 @@ class TestAsyncDB(unittest.IsolatedAsyncioTestCase):
             _ = await orm.insert(tableSpec, [
                 {'team_id': 't1', 'name': 'n1', 'country': '1', 'verified': True, },
                 {'team_id': 't2', 'name': 'n2', 'country': '2', 'verified': 0, }
-            ], debug=False)
+            ], batchSize=1)
             # assert 1 == 0
             rows = await db.query(orm.select(tableSpec))
             rows.sort(key=lambda row: row['team_id'])
@@ -156,7 +156,7 @@ class TestAsyncDB(unittest.IsolatedAsyncioTestCase):
                     'verified': True, 'index': 20},
                 {'team_id': 't3', 'name': 'n3', 'country': '3',
                     'verified': True, 'index': 20}
-            ])
+            ], batchSize=1)
             rows = await db.query(orm.select(tableSpec))
             rows.sort(key=lambda row: row['team_id'])
             assert len(rows) == 3
