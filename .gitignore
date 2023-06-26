@@ -1,5 +1,6 @@
 contrib/**/*
 !contrib/install.sh
+!contrib/Makefile
 
 **/*~
 **/__pycache__
