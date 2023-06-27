@@ -1,16 +1,25 @@
 import asyncio
-from .db import DB as DBSync
+from .db import DB as DB_sqlite
 
 
-class DB(DBSync):
+class DB(DB_sqlite):
+
+    @property
+    def sync(self):
+        return super()
+
+    @classmethod
+    def createORM(cls, db):
+        from .orm_async import ORM as _SQLITEORM
+        return _SQLITEORM(db)
 
     warn_async_ctr = 1
 
     async def query(self, qpT, transformer=None, stripParams=False, debug=None):
 
         def helper():
-            return super(DBSync, self).query(qpT, transformer=transformer,
-                              stripParams=stripParams, fetchAll=True, debug=debug)
+            return self.sync.query(qpT, transformer=transformer,
+                                   stripParams=stripParams, fetchAll=True, debug=debug)
         if self.warn_async_ctr > 0:
             self.log.warning(
                 'sqlite DB does not support async/await and the code runs in executor.')

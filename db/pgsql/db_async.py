@@ -1,10 +1,14 @@
 import psycopg
 
-from .db import DB as DBSync
+from .db import DB as DB_pgsql
 from ..ts import Ts
 
 
-class DB(DBSync):
+class DB(DB_pgsql):
+
+    @property
+    def sync(self):
+        return super()
 
     @classmethod
     def createORM(cls, db):
