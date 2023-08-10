@@ -5,6 +5,7 @@ from ..db import DB as DB0
 from ..db import DBError as DBError0
 from .util import Util
 from .pipes import Pipes
+from json import dumps
 
 import apsw
 # print ("      Using APSW file",apsw.__file__)                # from the extension module
@@ -36,26 +37,37 @@ class DB(DB0):
         from .util import Util as _SQLiteUtil
         return _SQLiteUtil()
 
-    def clone(self):
-        return self.__class__(*self.args, **self.kwargs)
-
-    def __init__(self, *args, fileName=':memory:', extensions=[],
-                 pragmas=[], attaches={}, log=None,
-                 busyRetries=None, busyTimeout=None):
+    def __init__(self,
+                 fileName=':memory:',
+                 extensions=[],
+                 pragmas=[],
+                 attaches={},
+                 log=None,
+                 busyRetries=None,
+                 busyTimeout=None
+                 ):
 
         util = Util()
-        super().__init__(util, log=log)
+        super().__init__(util,
+                         idArgs=self._makeArgs((), {
+                             'fileName': fileName,
+                             'extensions': extensions,
+                             'pragmas': pragmas,
+                             'attaches': attaches,
+                             'busyRetries': busyRetries,
+                             'busyTimeout': busyTimeout
+                         }),
+                         cloneArgs=self._makeArgs((), {
+                             'fileName': fileName,
+                             'extensions': extensions,
+                             'pragmas': pragmas,
+                             'log': log,
+                             'attaches': attaches,
+                             'busyRetries': busyRetries,
+                             'busyTimeout': busyTimeout
+                         }),
+                         log=log)
 
-        self.args = args
-        self.kwargs = {
-            'fileName': fileName,
-            'extensions': extensions,
-            'pragmas': pragmas,
-            'attaches': attaches,
-            'log': log,
-            'busyRetries': busyRetries,
-            'busyTimeout': busyTimeout,
-        }
         self.log.info('filename: %s' % fileName)
         self._filePath = fileName
         self.db = apsw.Connection(fileName, statementcachesize=20)
@@ -287,9 +299,11 @@ class DB(DB0):
         # T = transformer if not transformer is None else Ts.transformerFactory(T, inverse=True)
         self.log.debug('q,p,T: %s, %s, %s' % (q, p, T))
 
-        cursor = self.cursor
-        r = cursor.execute(q, p)
-        return createFetchOne(cursor)
+        try:
+            return createFetchOne(self.cursor.execute(q, p))
+        except Exception as e:
+            print(e)
+            raise e
 
     def attach(self, filePath, name=None):
         _name = name if name else filePath

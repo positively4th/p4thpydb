@@ -50,7 +50,11 @@ class DB(DB0):
         return _PGUtil()
 
     def __init__(self, url=None, log=None, **kwargs):
-        super().__init__(Util(), log=log)
+        super().__init__(self.createUtil(),
+                         idArgs=self._makeArgs((), {'url': url}),
+                         cloneArgs=self._makeArgs(
+                             (), {**kwargs, 'url': url, 'log': log}),
+                         log=log)
 
         self._url = self.createURL(**kwargs) if url is None else url
 

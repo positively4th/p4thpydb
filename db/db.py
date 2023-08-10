@@ -1,6 +1,8 @@
 from .ts import Ts
 import re
 from uuid import uuid4
+from xxhash import xxh64
+
 import logging
 log0 = logging.getLogger(__name__)
 
@@ -31,10 +33,48 @@ class DB:
     def clone(self):
         assert False, 'Not implemented'
 
-    def __init__(self, util, log=log0):
+    def __init__(self, util, idArgs, cloneArgs, log=log0):
+        self.cloneArgs = cloneArgs
+        self.idArgs = idArgs
+
         self.util = util
         self._log = log
         self.savepoints = []
+
+    @classmethod
+    def _makeArgs(cls, args, kwargs):
+        return (args, kwargs)
+
+    def clone(self):
+        return self.__class__(*self.cloneArgs[0], **self.cloneArgs[1])
+
+    def _makeId(self, idArgs):
+        id = xxh64()
+        id.update(self.__class__.__name__)
+        id.update(self.__class__.__module__)
+
+        for arg in sorted(idArgs[0]):
+            try:
+                id.update(str(arg))
+            except Exception as e:
+                self.log.warning(
+                    f"'DB cannot be identidied with given init arguments: { str(e) }")
+                id.update(str(uuid4()))
+
+        for key in sorted(idArgs[1].keys()):
+            try:
+                id.update(str(key))
+                id.update(str(idArgs[1][key]))
+            except Exception as e:
+                self.log.warning(
+                    f"'DB cannot be identidied with given init arguments: { key }: { str(e) }")
+                id.update(str(uuid4()))
+
+        return str(id.hexdigest())
+
+    @property
+    def id(self):
+        return self._makeId(self.idArgs)
 
     @property
     def log(self):
@@ -124,7 +164,6 @@ class DB:
         '''.format(columns=qColumns, rows=qRows)
 
         return q
-
 
     @staticmethod
     def generateRow(fetchOne, T):

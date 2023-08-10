@@ -32,10 +32,6 @@ class DB(DB_pgsql):
     def __init__(self, url=None, log=None, aSync=False, **kwargs):
         super().__init__(url, log, **kwargs)
 
-        self._url = self.createURL(**kwargs) if url is None else url
-
-        self.log.debug('url %s' % self.url)
-        self.db = self.connect()
         self._cursor = None
         self._async_db = None
 

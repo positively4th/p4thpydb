@@ -24,8 +24,7 @@ class DB(DB_sqlite):
             self.log.warning(
                 'sqlite DB does not support async/await and the code runs in executor.')
             self.warn_async_ctr -= 1
-        res = await asyncio.get_event_loop().run_in_executor(None, helper)
-        return res
+        return await asyncio.get_event_loop().run_in_executor(None, helper)
 
     async def tableExists(self, tableName, columnNames):
         sch, tbl = self.util.schemaTableSplit(tableName)
