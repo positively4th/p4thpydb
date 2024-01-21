@@ -1,6 +1,8 @@
 import asyncio
 from .db import DB as DB_sqlite
 
+from uuid import uuid4
+
 
 class DB(DB_sqlite):
 
@@ -25,6 +27,25 @@ class DB(DB_sqlite):
                 'sqlite DB does not support async/await and the code runs in executor.')
             self.warn_async_ctr -= 1
         return await asyncio.get_event_loop().run_in_executor(None, helper)
+
+    async def startTransaction(self):
+        self.log.debug('startTransaction (%s)' % len(self.savepoints))
+        id = str(uuid4())
+        await self.query('SAVEPOINT "{}"'.format(id), debug=None)
+        self.savepoints.append(id)
+
+    async def rollback(self):
+        self.log.debug('rollback (%s)' % len(self.savepoints))
+        if len(self.savepoints) < 1:
+            return
+        id = self.savepoints.pop()
+        await self.query(('ROLLBACK TO "{}"'.format(id)), debug=None)
+        await self.query(('RELEASE "{}"'.format(id)), debug=None)
+
+    async def commit(self):
+        self.log.debug('commit (%s)' % len(self.savepoints))
+        id = self.savepoints.pop()
+        await self.query(('RELEASE "{}"'.format(id)), debug=None)
 
     async def tableExists(self, tableName, columnNames):
         sch, tbl = self.util.schemaTableSplit(tableName)

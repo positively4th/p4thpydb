@@ -2,7 +2,7 @@ from .ts import Ts
 import re
 from uuid import uuid4
 from xxhash import xxh64
-
+import ramda as R
 import logging
 log0 = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ class DB:
                 id.update(str(arg))
             except Exception as e:
                 self.log.warning(
-                    f"'DB cannot be identidied with given init arguments: { str(e) }")
+                    f"'DB cannot be identidied with given init arguments: {str(e)}")
                 id.update(str(uuid4()))
 
         for key in sorted(idArgs[1].keys()):
@@ -67,7 +67,7 @@ class DB:
                 id.update(str(idArgs[1][key]))
             except Exception as e:
                 self.log.warning(
-                    f"'DB cannot be identidied with given init arguments: { key }: { str(e) }")
+                    f"'DB cannot be identidied with given init arguments: {key}: {str(e)}")
                 id.update(str(uuid4()))
 
         return str(id.hexdigest())
@@ -128,11 +128,20 @@ class DB:
 
     def query(self, qpT, transformer=None, stripParams=False, fetchAll=False, debug=None):
         q, p, T = self.util.qpTSplit(qpT)
-        T = transformer if transformer is not None else Ts.transformerFactory(
-            T, inverse=True)
-        fetchOne = self._queryHelper((q, p), transformer, stripParams, debug)
+        if isinstance(T, dict) and not callable(T):
+            T = Ts.RowTransformer(T)
+        pipes = []
+        if callable(T):
+            pipes.append(
+                lambda row: T(row, inverse=True)
+            )
+        if callable(transformer):
+            pipes.append(transformer)
+        _T = R.pipe(*pipes) if len(pipes) > 0 else lambda r: r
 
-        gen = self.generateRow(fetchOne, T)
+        fetchOne = self._queryHelper((q, p), None, stripParams, debug)
+
+        gen = self.generateRow(fetchOne, _T)
         if fetchAll:
             return [r for r in gen]
 
@@ -141,6 +150,10 @@ class DB:
     @classmethod
     def constantRows(cls, colTypeMap: dict, rows: tuple | list):
 
+        def eval(type, value):
+            return type(value) if callable(type) \
+                else f'cast({value} as {type})'
+
         util = cls.createUtil()
         qColumns = util.quote([col for col in colTypeMap.keys()])
         qColumns = ', '.join(qColumns)
@@ -148,10 +161,9 @@ class DB:
         for row in rows:
             qRow = []
             for name, type in colTypeMap.items():
-                value = row[name] if name in row else 'null'
+                value = row[name] if name in row and row[name] is not None else 'null'
                 if value != 'null':
-                    value = 'cast({value} as {type})'.format(
-                        value=value, type=type)
+                    value = eval(type, value)
                 qRow.append(value)
             qRows.append('({})'.format(', '.join(qRow)))
         qRows = ','.join(qRows)

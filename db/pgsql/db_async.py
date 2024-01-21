@@ -1,4 +1,7 @@
 import psycopg
+import ramda as R
+from typing import Union
+from typeguard import check_type
 
 from .db import DB as DB_pgsql
 from ..ts import Ts
@@ -15,10 +18,22 @@ class DB(DB_pgsql):
         from .orm_async import ORM as _PGORM
         return _PGORM(db)
 
-    async def query(self, qpT, debug=None):
+    async def query(self, qpT, transformer=None, stripParams=False, debug=None):
+
         q, p, T = self.util.qpTSplit(qpT)
         q = DB.protectMod(q)
-        T = Ts.transformerFactory(T, inverse=True)
+
+        check_type(T, Union[Ts.RowTransformer, dict, None])
+        if isinstance(T, dict) and not callable(T):
+            T = Ts.RowTransformer(T)
+        pipes = []
+        if callable(T):
+            pipes.append(
+                lambda row: T(row, inverse=True)
+            )
+        if callable(transformer):
+            pipes.append(transformer)
+        _T = R.pipe(*pipes) if len(pipes) > 0 else lambda r: r
 
         async with await self.async_cursor as cursor:
             await cursor.execute(q, p)
@@ -27,7 +42,7 @@ class DB(DB_pgsql):
             else:
                 return None
 
-        return [T(row) for row in rows]
+        return [_T(row) for row in rows]
 
     def __init__(self, url=None, log=None, aSync=False, **kwargs):
         super().__init__(url, log, **kwargs)
@@ -37,8 +52,8 @@ class DB(DB_pgsql):
 
     def __del__(self):
         if self._async_db is not None:
-            self.async_db.close()
-            self.async_db = None
+            self._async_db.close()
+            self._async_db = None
 
     def connect(self):
         return psycopg.connect(self.url, autocommit=True)

@@ -1,5 +1,6 @@
 import ramda as R
 import asyncio
+import itertools
 
 from .ormqueries import ORMQueries
 from .ormqueries import TableSpecModel
@@ -12,14 +13,14 @@ class ORM(ORMQueries):
         self.db = db
 
     def query(self, qpT, *args, **kwargs):
-        return self.db.query(qpT, *args, **kwargs)
+        q, p, T = self.util.qpTSplit(qpT)
+        return self.db.query((q, p, T), *args, **kwargs)
 
     def queries(self, args):
         return asyncio.gather(*[self.query(_[0], **_[1]) for _ in args])
 
     async def tableExists(self, tableSpec):
         model = TableSpecModel(tableSpec)
-        # allColumns = ', '.join(self.util.quote(model.allColumns()))
         return await self.db.tableExists(tableSpec['name'], model.allColumns())
 
     async def createTable(self, tableSpec):
@@ -39,11 +40,11 @@ class ORM(ORMQueries):
         qArgs += self._dropTable(tableSpec)
         return self.queries(qArgs)
 
-    def insert(self, tableSpec, rows, returning=None, batchSize=None):
+    async def insert(self, tableSpec, rows, returning=None, batchSize=None):
         _batchSize = self.defBatchSize if batchSize is None else batchSize
         qArgs = self._insert(
             tableSpec, rows, returning=returning, batchSize=_batchSize)
-        return self.queries(qArgs)
+        return R.unnest(await self.queries(qArgs))
 
     async def update(self, tableSpec, rows, debug=False, returning=None):
         qArgs = self._update(tableSpec, rows, debug, returning)
@@ -52,16 +53,26 @@ class ORM(ORMQueries):
         assert res is None or len(res) == len(rows)
         return res
 
-    async def upsert(self, tableSpec, rows, batchSize=None):
-        _batchSize = self.defBatchSize if batchSize is None else batchSize
-        updates = self._upsertUpdate(tableSpec, rows)
-        res = await self.queries(updates)
-        res = ((r for r in rows) for rows in res)
-        ups, ins = self._upsertInsert(
-            tableSpec, rows, res, batchSize=_batchSize)
-        ins = await self.queries(ins)
+    async def upsert(self, tableSpec, rows, returning=None, batchSize=None):
+        _returning = self.prepareReturning(tableSpec, returning)
 
-        return ins + ups
+        _batchSize = self.defBatchSize if batchSize is None else batchSize
+        updates, omits = self._upsertUpdate(
+            tableSpec, rows, returning=_returning)
+        res = await self.queries(updates)
+        res = (
+            (
+                r for r in rows
+            ) for rows in res
+        )
+        ups, ins = self._upsertInsert(
+            tableSpec, rows, res, batchSize=_batchSize, returning=returning)
+        ups = itertools.chain(*ups)
+        # ups = list(ups) #for debugging
+        ins = await self.queries(ins)
+        ups = map(R.omit(omits), ups)
+        # ups = list(ups) #for debugging
+        return itertools.chain(*ins, ups)
 
     async def delete(self, tableSpec, keyMaps,):
         qArgs = self._deleteSelectQuery(tableSpec, keyMaps)

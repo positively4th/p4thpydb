@@ -348,6 +348,32 @@ class DB(DB0):
         b = set(columnNames)
         return a.issubset(b) and b.issubset(a)
 
+    @classmethod
+    def constantRows(cls, colTypeMap: dict, rows: tuple | list):
+
+        def eval(type, value):
+            return type(value) if callable(type) \
+                else f'cast({value} as {type})'
+
+        util = cls.createUtil()
+        qColumns = util.quote([col for col in colTypeMap.keys()])
+        qColumns = ', '.join(qColumns)
+        qRows = []
+        for row in rows:
+            qRow = []
+            for name, type in colTypeMap.items():
+                value = row[name] if name in row and row[name] is not None else 'null'
+                if value != 'null':
+                    value = eval(type, value)
+                qRow.append(value)
+            qRows.append('({})'.format(', '.join(qRow)))
+        qRows = ','.join(qRows)
+
+        q = f'''with _cte_({qColumns}) as (values {
+            qRows}) select * from _cte_'''
+        print(q)
+        return q
+
     def exportToFile(self, path, invert=False, explain=False, schemas=['main'], restoreTables=None):
 
         if (invert):

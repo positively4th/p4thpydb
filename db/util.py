@@ -104,8 +104,7 @@ class Util():
         return self.quoteRe.sub(replace, expr)
 
     def p(self, p, val, name='', prefix='', suffix=''):
-        name = str(self.pNamePrefix) + self.nextUniq(prefix=name,
-                                                     suffix=self._pId, sep='_', caster=str)
+        name = str(self.pNamePrefix) + self.nextUniq(name, self._pId, str)
         p[name] = val
         return self.prefix + prefix + name + suffix + self.suffix
 

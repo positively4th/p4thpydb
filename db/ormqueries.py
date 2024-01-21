@@ -2,8 +2,12 @@ import json
 import ramda as R
 import itertools
 import inspect
+from typeguard import check_type
+from typeguard import typechecked
+from typing import Union
 
 from contrib.p4thpymisc.src.misc import items
+from .ts import Ts
 
 
 class ColumnSpecModel:
@@ -39,6 +43,35 @@ class ORMQueries:
         pass
 
     emptyMarker = EmptyMarker()
+
+    def prepareReturning(self, tableSpec, returning, asString: bool = False):
+        _returning = [] if returning is None else returning
+        _returning = [expr.strip() for expr in _returning.split(
+            ',')] if isinstance(_returning, str) else _returning
+        _returning = tableSpec['columns'].keys() \
+            if _returning == '*' else _returning
+        _returning = set(_returning)
+
+        if asString:
+            if len(_returning) < 1:
+                _returning = ''
+            else:
+                _returning = ' RETURNING ' + \
+                    ' , '.join(self.util.quote(_returning))
+
+        return _returning
+
+    @classmethod
+    def keysFromRow(cls, keyNames: list | tuple, row: dict | list | tuple) -> dict:
+        return R.pick(keyNames)(
+            row if isinstance(row, dict) else row[0]
+        )
+
+    @classmethod
+    def valuesFromRow(cls, valueNames: list | tuple, row: dict | list | tuple) -> dict:
+        return R.pick(valueNames)(
+            row if isinstance(row, dict) else row[1]
+        )
 
     @classmethod
     def peek(cls, it, steps=1):
@@ -119,14 +152,23 @@ class ORMQueries:
         q = 'DROP VIEW IF  EXISTS {}'.format(self.util.quote(viewName))
         return [((q, {}), {})]
 
-    def _insert(self, tableSpec, rows: tuple | list, batchSize, returning=None):
+    def applyRowTransform(self, tableSpec, rows, inverse):
+        return [
+            tableSpec['rowTransform'](r, inverse) for r in rows
+        ] if 'rowTransform' in tableSpec \
+            else rows
 
+    def _insert(self, tableSpec, groupedRows: tuple | list, batchSize, returning=None):
+
+        _rows = self.applyRowTransform(tableSpec, groupedRows, False)
         model = TableSpecModel(tableSpec)
+        TMap = model.Ts()
         columnModelMap = {
             name: ColumnSpecModel(spec) for name, spec in items(tableSpec['columnSpecs'], sort=True)
         }
 
         def insertHelper(rows):
+
             columns = [col for col in allColumns if col in rows[0]]
             p = {}
             placeholders = [
@@ -143,36 +185,35 @@ class ORMQueries:
 
             q = 'INSERT INTO {} ({}) VALUES {}'.format(self.util.quote(
                 tableSpec['name']), ', '.join(self.util.quote(columns)), placeholders)
-            qpT = (q, p,  model.Ts())
-            qpT = self._returning(qpT, returning)
+            qpT = (q, p, TMap)
+            qpT = self._returning(tableSpec, qpT, returning)
             return qpT, {}
 
-        if len(rows) < 1:
+        if len(groupedRows) < 1:
             return []
 
         allColumns = model.allColumns()
 
         rowGroups = R.group_by(
             lambda r: json.dumps(sorted(r.keys()))
-        )(rows)
+        )(_rows)
 
         res = []
-        for _, rows in rowGroups.items():
+        for _, groupedRows in rowGroups.items():
             rowCtr = 0
-            while rowCtr < len(rows):
-                res.append(insertHelper(rows[rowCtr:rowCtr+batchSize]))
+            while rowCtr < len(groupedRows):
+                res.append(insertHelper(groupedRows[rowCtr:rowCtr+batchSize]))
                 rowCtr += batchSize
 
         return res
 
-    def _returning(self, qpT, returning=None):
-        q, p, T = self.util.qpTSplit(qpT)
-        if returning is None:
-            _returning = ''
-        elif isinstance(returning, str):
-            _returning = ' RETURNING ' + returning
-        else:
-            _returning = ' RETURNING ' + ' , '.join(self.util.quote(returning))
+    def _returning(self, tableSpec, qpTMap, returning=None):
+        _returning = self.prepareReturning(tableSpec, returning, asString=True)
+        q, p, TMap = self.util.qpTSplit(qpTMap)
+        check_type(TMap, Union[dict, None])
+        T = Ts.RowTransformer(TMap)
+        if 'rowTransform' in tableSpec:
+            T.rowTransform = tableSpec['rowTransform']
         q = '{} {}'.format(q, _returning)
         return (q, p, T)
 
@@ -195,8 +236,12 @@ class ORMQueries:
         return res
 
     def _update(self, tableSpec, rows, debug=False, returning=None):
+
+        _rows = self.applyRowTransform(tableSpec, rows, False)
         qArgs = []
         tsModel = TableSpecModel(tableSpec)
+        TMap = tsModel.Ts()
+
         valueColumns = set(tableSpec['columnSpecs'].keys()).difference(
             set(tableSpec['primaryKeys']))
         if len(valueColumns) < 1 and returning is None:
@@ -207,20 +252,24 @@ class ORMQueries:
         keySpecs = {
             col: ColumnSpecModel(tableSpec['columnSpecs'][col]) for i, col in items(tableSpec['primaryKeys'], sort=True)
         }
+        valSpecs = {**keySpecs, **valSpecs}
 
-        for i, row in enumerate(rows):
+        for i, row in enumerate(_rows):
+            valRow = self.valuesFromRow(valSpecs.keys(), row)
             p = {}
             valAssigns = [
                 '{} = {}'.format(self.util.quote(col), self.util.p(
-                    p, spec.transform(row[col], inverse=False)))
+                    p, spec.transform(valRow[col], inverse=False)))
                 for col, spec in items(valSpecs, sort=True)
-                if col in row
+                if col in valRow
             ]
+
+            keyRow = self.keysFromRow(valSpecs.keys(), row)
             keyWheres = [
                 '{} = {}'.format(self.util.quote(col), self.util.p(
-                    p, spec.transform(row[col], inverse=False)))
+                    p, spec.transform(keyRow[col], inverse=False)))
                 for col, spec in items(keySpecs, sort=True)
-                if col in row
+                if col in keyRow
             ]
 
             if len(valAssigns) > 0:
@@ -228,19 +277,21 @@ class ORMQueries:
                                                        ','.join(valAssigns),
                                                        ' AND '.join(keyWheres)
                                                        )
-                qpT = self._returning((q, p, tsModel.Ts()), returning)
+                qpT = self._returning(tableSpec, (q, p, TMap), returning)
             else:
                 q = 'SELECT {} FROM {} WHERE {}'.format(','.join(self.util.quote(returning)),
                                                         self.util.quote(
                                                             tableSpec['name']),
                                                         ' AND '.join(keyWheres)
                                                         )
-                qpT = (q, p, tsModel.Ts())
+                T = Ts.RowTransformer(TMap)
+                if 'rowTransform' in tableSpec:
+                    T.rowTransform = tableSpec['rowTransform']
+                qpT = (q, p, T)
             qArgs.append((qpT, {}))
         return qArgs
 
-    def _upsertInsert(self, tableSpec, rows, res, batchSize):
-
+    def _upsertInsert(self, tableSpec, rows, res, batchSize, returning=None):
         ups = []
         ins = []
         for i, rowGen in enumerate(res):
@@ -253,12 +304,16 @@ class ORMQueries:
             if insRow is not None:
                 ins.append(insRow)
 
-        return ups, self._insert(tableSpec, ins, returning=tableSpec['primaryKeys'], batchSize=batchSize)
+        # return ups, self._insert(tableSpec, ins, returning=tableSpec['primaryKeys'], batchSize=batchSize)
+        return ups, self._insert(tableSpec, ins, returning=returning, batchSize=batchSize)
 
-    def _upsertUpdate(self, tableSpec, rows):
+    @typechecked
+    def _upsertUpdate(self, tableSpec, rows, returning: set = None):
+
         res = self._update(
-            tableSpec, rows, returning=tableSpec['primaryKeys'])
-        return res
+            tableSpec, rows, returning=set(tableSpec['primaryKeys']).union(returning))
+
+        return res, R.difference(tableSpec['primaryKeys'], returning)
 
     def join(self, qpT, relatedSpec):
 
@@ -319,20 +374,21 @@ class ORMQueries:
         ])
 
         q = 'DELETE FROM {} WHERE EXISTS ({} WHERE {})'.format(table, q, where)
-        T = tss.Ts()
+        T = Ts.RowTransformer(tss.Ts())
+        if 'rowTransform' in tableSpec:
+            T._rowTransform = tableSpec['rowTransform']
 
         return [((q, p, T), {})]
 
     def select(self, tableSpec):
         tss = TableSpecModel(tableSpec)
-        models = {
-            name: ColumnSpecModel(spec) for name, spec in tableSpec['columnSpecs'].items()
-        }
         allColumns = ', '.join(self.util.quote(tss.allColumns()))
         q = 'SELECT {} FROM {}'.format(
             allColumns, self.util.quote(tableSpec['name']))
         p = []
-        T = tss.Ts()
+        T = Ts.RowTransformer(tss.Ts())
+        if 'rowTransform' in tableSpec:
+            T._rowTransform = tableSpec['rowTransform']
         return q, p, T
 
     def view(self, tableSpec, view):
@@ -346,8 +402,8 @@ class ORMQueries:
 
         q = 'SELECT {} FROM {}'.format(allColumns, self.util.quote(view))
         p = []
-        T = {name: cs['transform'] for name, cs in items(
-            viewSpec['columnSpecs'], sort=True)}
+        T = Ts.RowTransformer({name: cs['transform'] for name, cs in items(
+            viewSpec['columnSpecs'], sort=True)})
         return (q, p, T)
 
     @staticmethod

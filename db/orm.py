@@ -1,4 +1,5 @@
 import itertools
+import ramda as R
 
 from .ormqueries import ORMQueries
 from .ormqueries import TableSpecModel
@@ -46,11 +47,15 @@ class ORM(ORMQueries):
         # allColumns = ', '.join(self.util.quote(model.allColumns()))
         return self.db.tableExists(tableSpec['name'], model.allColumns())
 
-    def insert(self, tableSpec, rows, returning=None, batchSize=None, debug=False):
+    def insert(self, tableSpec, rows, fetchAll=False, returning=None, batchSize=None, debug=False):
         _batchSize = self.defBatchSize if batchSize is None else batchSize
         qArgs = self._insert(
             tableSpec, rows, returning=returning, batchSize=_batchSize)
-        return self.queries(qArgs)
+        res = self.queries(qArgs)
+        res = itertools.chain(*res)
+        if fetchAll:
+            res = list(res)
+        return res
 
     def update(self, tableSpec, rows, debug=False, returning=None):
 
@@ -60,15 +65,16 @@ class ORM(ORMQueries):
         assert res is None or len(res) == len(rows)
         return res
 
-    def upsert(self, tableSpec, rows, fetchAll=False, batchSize=None, debug=False):
+    def upsert(self, tableSpec, rows, fetchAll=False, batchSize=None, returning=None, debug=False):
         _batchSize = self.defBatchSize if batchSize is None else batchSize
-        updates = self._upsertUpdate(tableSpec, rows)
+        _returning = self.prepareReturning(tableSpec, returning)
+        updates, omits = self._upsertUpdate(
+            tableSpec, rows, returning=_returning)
         res = self.queries(updates)
         ups, ins = self._upsertInsert(
-            tableSpec, rows, res, batchSize=_batchSize)
+            tableSpec, rows, res, batchSize=_batchSize, returning=returning)
 
-        if ins is None:
-            assert ins is not None
+        assert ins is not None
         for i in ins:
             if ins is None:
                 pass
@@ -76,9 +82,12 @@ class ORM(ORMQueries):
 
         ins = self.queries(ins)
 
-        res = ins + ups
+        ups = itertools.chain(*ups)
+        ups = map(R.omit(omits), ups)
+
+        res = itertools.chain(*ins, ups)
         if fetchAll:
-            res = [r for r in rows]
+            res = [r for r in res]
         return res
 
     def delete(self, tableSpec, keyMaps, fetchAll=False):

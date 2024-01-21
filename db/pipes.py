@@ -1,4 +1,3 @@
-from .util import Util
 
 
 class PipesError(Exception):
@@ -44,7 +43,7 @@ class Pipes():
         vs = values
         # print('pipeValues', values)
         if vs == None:
-            return q, p
+            return q, p, T
         vs = [vs] if isinstance(vs, (float, int, str)) else list(vs)
         if T and expr in T:
             vs = [T[expr](v) for v in vs]

@@ -281,7 +281,7 @@ class TestDBSQLite(unittest.TestCase):
         p = []
         q, p, T = pipes.concat((q, p), pipes=[
             [pipes.like, {'expr': 'id', 'pattern': '%2%'}],
-            [pipes.order, {'exprs': ['id'], 'orders':['DESC']}],
+            [pipes.order, {'exprs': ['id'], 'orders': ['DESC']}],
         ])
         rows = db.query((q, p, T), fetchAll=True)
         assert len(rows) == 3
@@ -295,7 +295,7 @@ class TestDBSQLite(unittest.TestCase):
         q, p, T = pipes.concat((q, p), pipes=[
             [pipes.member, {'expr': 'a', 'values': ['2', '3']}],
             [pipes.order, {'exprs': ['a', 'b', 'c'],
-                           'orders':['DESC', 'DESC', 'DESC']}],
+                           'orders': ['DESC', 'DESC', 'DESC']}],
             [pipes.limit, {'limit': 10}],
         ])
         rows = db.query((q, p, T), fetchAll=True)
@@ -309,7 +309,7 @@ class TestDBSQLite(unittest.TestCase):
         q, p, T = pipes.concat((q, p), [
             [pipes.member, {'expr': 'a', 'values': ['2', '3']}],
             [pipes.order, {'exprs': ['a', 'b', 'c'],
-                           'orders':['DESC', 'DESC', 'DESC']}],
+                           'orders': ['DESC', 'DESC', 'DESC']}],
             [pipes.limit, {'limit': 2, 'offset': 1}]
         ])
         # [id, a, b, c] VALUES ('222', 2, 2, 2), ('321', 3, 2, 1), ('333', 3, 3, 3)
@@ -332,7 +332,7 @@ class TestDBSQLite(unittest.TestCase):
                     ]
                 }
             ],
-            [pipes.order, {'exprs': ['id'], 'orders':['DESC']}],
+            [pipes.order, {'exprs': ['id'], 'orders': ['DESC']}],
         ])
         rows = db.query((q, p, T), fetchAll=True)
         assert len(rows) == 2
@@ -351,7 +351,7 @@ class TestDBSQLite(unittest.TestCase):
                     ]
                 }
             ],
-            [pipes.order, {'exprs': ['id'], 'orders':['DESC']}],
+            [pipes.order, {'exprs': ['id'], 'orders': ['DESC']}],
         ])
         rows = db.query((q, p, T), fetchAll=True)
         assert len(rows) == 1
@@ -364,7 +364,7 @@ class TestDBSQLite(unittest.TestCase):
             [pipes.member((q, p, T), expr='b', values=['2'])],
             # [pipes.member, {'expr': 'b', 'values':['2']}],
             ['order', {'exprs': ['a', 'b', 'c'],
-                       'orders':['DESC', 'DESC', 'DESC']}],
+                       'orders': ['DESC', 'DESC', 'DESC']}],
             [pipes.limit, {'limit': 2, 'offset': 2}]
         ])
         rows = db.query((q, p, T), fetchAll=True)
@@ -520,6 +520,177 @@ class TestDBSQLite(unittest.TestCase):
         self.assertEqual({**rows[0], **{'path': 'u.user.name', 'schema': 'u', 'table': 'user',
                                         'index': 'name', 'primary_key': False}
                           }, rows[0])
+
+    def testRowTransform(self):
+        dbFile = ':memory:'
+        db = DB(dbFile, extensions=[
+            'contrib/sqlite3-pcre/pcre'
+        ])
+        pipes = Pipes()
+        orm = ORM(db)
+
+        def rowTransform(row, inverse):
+
+            dc = 1 if inverse else -1
+            res = {**row}
+            if 'c' in res:
+                res['c'] = res['c'] + dc
+
+            if inverse:
+                res['isInDB'] = True
+            else:
+                res.pop('isInDB', None)
+
+            return res
+
+        db.query(
+            'CREATE TABLE strvec3 (id TEXT, a DOUBLE PRECISION, b DOUBLE PRECISION, c DOUBLE PRECISION, PRIMARY KEY (id))')
+        tableSpec = {
+            'name': "strvec3",
+            'rowTransform': rowTransform,
+            'columnSpecs': {
+                'id': {'definition': "TEXT NOT NULL", 'transform': Ts.str, },
+                'a': {'definition': "DOUBLE PRECISION", 'transform': Ts.int},
+                'b': {'definition': "DOUBLE PRECISION", 'transform': Ts.int, },
+                'c': {'definition': "DOUBLE PRECISION", 'transform': Ts.int, },
+            },
+            'primaryKeys': ["id"]
+        }
+        assert True == orm.tableExists(tableSpec)
+        assert False == orm.ensureTable(tableSpec)
+
+        rows = orm.insert(tableSpec, [
+            {'id': '111', 'a': 1, 'b': 1, 'c': 1, 'isInDB': False},
+            {'id': '123', 'a': 1, 'b': 2, 'c': 3, 'isInDB': False},
+            {'id': '222', 'a': 2, 'b': 2, 'c': 2, 'isInDB': False},
+        ], fetchAll=True, returning=['id', 'c'])
+        self.assertEqual(3, len(rows))
+        rows = {r['id']: r for r in rows}
+        self.assertDictEqual(
+            {'id': '111', 'c': 1, 'isInDB': True},
+            rows['111']
+        )
+        self.assertDictEqual(
+            {'id': '123', 'c': 3, 'isInDB': True},
+            rows['123']
+        )
+        self.assertDictEqual(
+            {'id': '222', 'c': 2, 'isInDB': True},
+            rows['222']
+        )
+
+        rows = orm.upsert(tableSpec, [
+            {'id': '222', 'a': 2, 'b': 2, 'c': 2, 'isInDB': False},
+            {'id': '321', 'a': 3, 'b': 2, 'c': 1, 'isInDB': False},
+            {'id': '333', 'a': 1, 'b': 3, 'c': 3, 'isInDB': False},
+        ], fetchAll=True, returning=['id', 'c'])
+        self.assertEqual(3, len(rows))
+        rows = {r['id']: r for r in rows}
+        self.assertDictEqual(
+            {'id': '222', 'c': 2, 'isInDB': True},
+            rows['222']
+        )
+        self.assertDictEqual(
+            {'id': '321', 'c': 1, 'isInDB': True},
+            rows['321']
+        )
+        self.assertDictEqual(
+            {'id': '333', 'c': 3, 'isInDB': True},
+            rows['333']
+        )
+        rows = list(orm.upsert(tableSpec, [
+            {'id': '111', 'a': 1, 'b': 1, 'c': 1, 'isInDB': False},
+            {'id': '321', 'a': 3, 'b': 2, 'c': 1, 'isInDB': False},
+            {'id': '333', 'a': 1, 'b': 3, 'c': 3, 'isInDB': False},
+        ], returning=['id', 'c']))
+
+        qpT = orm.select(tableSpec)
+        qpT = pipes.member(qpT, 'id', ['333'])
+        qpT = pipes.order(qpT, ['id'])
+        rows = orm.query(qpT, fetchAll=True, debug=False)
+        self.assertEqual(1, len(rows))
+        self.assertDictEqual(
+            {
+                'id': '333', 'a': 1, 'b': 3, 'c': 3, 'isInDB': True},
+            rows[0]
+        )
+
+        qpT = orm.select(tableSpec)
+        qpT = pipes.member(qpT, 'id', ['333'])
+        qpT = pipes.order(qpT, ['id'])
+        rows = {r['id']: r for r in orm.query(qpT, debug=False)}
+        row333 = rows['333']
+
+        orm.update(tableSpec, [row333])
+        qpT = orm.select(tableSpec)
+        qpT = pipes.member(qpT, 'id', ['333'])
+        qpT = pipes.order(qpT, ['id'])
+        rows = [r for r in orm.query(qpT, debug=False)]
+        self.assertEqual(1, len(rows))
+        self.assertEqual(
+            row333,
+            rows[0]
+        )
+        orm.upsert(tableSpec, [row333])
+        qpT = orm.select(tableSpec)
+        qpT = pipes.member(qpT, 'id', ['333'])
+        qpT = pipes.order(qpT, ['id'])
+        rows = [r for r in orm.query(qpT, debug=False)]
+        self.assertEqual(1, len(rows))
+        self.assertEqual(
+            row333,
+            rows[0]
+        )
+
+        qpT = orm.select(tableSpec)
+        qpT = pipes.order(qpT, ['id'])
+        rows = [r for r in orm.query(qpT, debug=False)]
+        assert rows[0]['id'] == '111'
+        assert rows[0]['a'] == 1
+        assert rows[0]['isInDB']
+        assert rows[2]['id'] == '222'
+        assert rows[2]['a'] == 2
+        assert rows[2]['isInDB']
+        assert rows[3]['id'] == '321'
+        assert rows[3]['a'] == 3
+        assert rows[3]['isInDB']
+
+    def test_constant_rows(self):
+        dbFile = ':memory:'
+        db = DB(dbFile, extensions=[
+            'contrib/sqlite3-pcre/pcre'
+        ])
+
+        colTypeMap = {
+            'TextString': 'text',
+            'Float1': 'real',
+            'FloatString': lambda v: f'cast({v} as text)'
+        }
+
+        expRows = [
+            {'TextString': "'text1'", 'Float1': 1.0, 'FloatString': "'1.0'"},
+            {'TextString': "'text2'", 'Float1': "'10.0'", 'FloatString': 10.0},
+            {'TextString': None, 'Float1': None, 'FloatString': None},
+            {'TextString': None, 'FloatString': None},
+        ]
+
+        q = db.constantRows(colTypeMap=colTypeMap, rows=expRows)
+
+        actRows = db.query((q,), fetchAll=True)
+
+        self.assertEqual(len(expRows), len(actRows))
+        self.assertEqual({
+            'TextString': 'text1', 'Float1': 1.0, 'FloatString': '1.0'
+        }, actRows[0])
+        self.assertEqual({
+            'TextString': 'text2', 'Float1': 10.0, 'FloatString': '10.0'
+        }, actRows[1])
+        self.assertEqual({
+            'TextString': None, 'Float1': None, 'FloatString': None
+        }, actRows[2])
+        self.assertEqual({
+            'TextString': None, 'Float1': None, 'FloatString': None
+        }, actRows[3])
 
 
 if __name__ == '__main__':

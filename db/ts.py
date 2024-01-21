@@ -5,6 +5,50 @@ import dill
 
 class Ts:
 
+    class RowTransformer(dict):
+        def __init__(self, *args, rowTransform=lambda row, *args, **kwargs: row, **kwargs):
+            super().__init__(*args, **kwargs)
+
+            self._rowTransform = rowTransform
+
+        def __call__(self, row, inverse, *args, **kwargs):
+            try:
+                res = {
+                    key: self[key](val, inverse) if key in self else val for key, val in row.items()
+                }
+            except Exception as e:
+                print(f'tranformer keys: {self.keys()}')
+                print(f'row keys:        {row.keys()}')
+                raise e
+
+            if callable(self.rowTransform):
+                res = self.rowTransform(res, inverse, *args, **kwargs)
+
+            return res
+
+        @property
+        def rowTransform(self):
+            return self._rowTransform
+
+        @rowTransform.setter
+        def rowTransform(self, f):
+            self._rowTransform = f
+
+        @rowTransform.deleter
+        def rowTransform(self):
+            self._rowTransform = None
+
+        def chainRowTransform(self, rowTransform):
+
+            rowTransform0 = self.rowTransform
+
+            def chainedRowTransform(row, inverse, *args, **kwargs):
+                res = rowTransform0(row, inverse, *args, **kwargs)
+                res = rowTransform(res, inverse, *args, **kwargs)
+                return res
+
+            self.rowTransform = chainedRowTransform
+
     def transformerFactory(transformMap, inverse=False):
 
         def _(row):
@@ -129,6 +173,18 @@ class Ts:
     #        return res
     #    res = dill.dumps(val)
     #    return res
+
+    def nullable(T: callable, isNullChecker: lambda val: val is None) -> callable:
+
+        def nullable(val, inverse=False):
+
+            if isNullChecker(val):
+                return None
+
+            return T(val, inverse=inverse)
+
+        nullable.__name__ = f'nullable_{T.__name__}'
+        return nullable
 
     @staticmethod
     def Classes(val, inverse=False):
